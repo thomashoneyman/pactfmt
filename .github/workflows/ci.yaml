@@ -1,0 +1,26 @@
+name: Cargo Build & Test
+
+on:
+  push:
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build_and_test:
+    name: pactfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # We want these to come from the rust toolchain
+      - run: |
+          rm /home/runner/.cargo/bin/rust-analyzer
+          rm /home/runner/.cargo/bin/rustfmt
+          rm /home/runner/.cargo/bin/cargo-fmt
+
+      - run: rustup update
+      - run: cargo build --verbose
+      - run: cargo test --verbose
+      - run: cargo clippy --locked -- -D warnings
+      - run: cargo fmt --check
