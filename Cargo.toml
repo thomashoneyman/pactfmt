@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 glob = "0.3.1"
+logos = "0.14.0"
