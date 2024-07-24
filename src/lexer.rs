@@ -59,10 +59,113 @@ pub enum Token {
     )]
     Ident,
 
-    #[regex(r";[^\n]*\n?")]
+    #[token("let*")]
+    LetRec,
+
+    #[token("let")]
+    Let,
+
+    #[token("if")]
+    If,
+
+    #[token("defun")]
+    Defun,
+
+    #[token("defcap")]
+    DefCap,
+
+    #[token("defconst")]
+    DefConst,
+
+    #[token("defschema")]
+    DefSchema,
+
+    #[token("deftable")]
+    DefTable,
+
+    #[token("defpact")]
+    DefPact,
+
+    #[token("interface")]
+    Interface,
+
+    #[token("module")]
+    Module,
+
+    #[token("bless")]
+    Bless,
+
+    #[token("implements")]
+    Implements,
+
+    #[token("use")]
+    Use,
+
+    #[token("lambda")]
+    Lambda,
+
+    #[token("and")]
+    And,
+
+    #[token("or")]
+    Or,
+
+    #[token("load")]
+    Load,
+
+    #[token("@doc")]
+    DocAnn,
+
+    #[token("@model")]
+    ModelAnn,
+
+    #[token("@event")]
+    EventAnn,
+
+    #[token("@managed")]
+    ManagedAnn,
+
+    #[token("step-with-rollback")]
+    StepWithRollback,
+
+    #[token("enforce")]
+    Enforce,
+
+    #[token("enforce-one")]
+    EnforceOne,
+
+    #[token("step")]
+    Step,
+
+    #[token("with-capability")]
+    WithCapability,
+
+    #[token("create-user-guard")]
+    CreateUserGuard,
+
+    #[token("try")]
+    Try,
+
+    #[token("do")]
+    Do,
+
+    #[token("suspend")]
+    Suspend,
+
+    // Comments are a semicolon followed by a sequence of characters terminated by a newline. The
+    // newline is consumed and dropped from the token stream.
+    #[regex(r";[^\n]*", callback = |lex| {
+        if lex.remainder().starts_with('\n') {
+            lex.bump(1);
+        }
+        Some(())
+    })]
     Comment,
 
-    #[regex(r"[ \t\n\r]+", logos::skip)]
+    #[token("\n")]
+    Newline,
+
+    #[regex(r"[ \t\r]+", logos::skip)]
     Whitespace,
 }
 
@@ -163,8 +266,8 @@ mod tests {
     #[test]
     fn test_comment() {
         assert_eq!(
-            lex_ok("; This is a comment\n; With a newline"),
-            vec![Token::Comment, Token::Comment]
+            lex_ok("; This is a comment\n; With a trailing newline\n\n"),
+            vec![Token::Comment, Token::Comment, Token::Newline]
         );
         assert_eq!(lex_ok("; Comment without newline"), vec![Token::Comment]);
     }
