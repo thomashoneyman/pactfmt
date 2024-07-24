@@ -1,10 +1,12 @@
 use std::env;
+use std::error;
 use std::fs;
-use std::io::{self};
 use std::path::Path;
 use std::process;
 
-fn main() -> io::Result<()> {
+type Result<T> = std::result::Result<T, Box<dyn error::Error>>;
+
+fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 3 {
@@ -16,28 +18,28 @@ fn main() -> io::Result<()> {
     let patterns = &args[2..];
 
     match command.as_str() {
-        "check" => check(patterns),
-        "format" => format(patterns),
+        "check" => check(patterns)?,
+        "format" => format(patterns)?,
         _ => {
             eprintln!("Unknown command: {}", command);
             process::exit(1);
         }
     }
+
+    Ok(())
 }
 
-fn check(patterns: &[String]) -> io::Result<()> {
+fn check(patterns: &[String]) -> Result<()> {
     let mut all_formatted = true;
     for pattern in patterns {
-        for entry in glob::glob(pattern).expect("Failed to read glob pattern") {
+        for entry in glob::glob(pattern)? {
             match entry {
-                Ok(path) => match check_file(&path) {
-                    Ok(true) => (),
-                    Ok(false) => {
+                Ok(path) => {
+                    if !check_file(&path)? {
                         println!("Would reformat {}", path.display());
                         all_formatted = false;
                     }
-                    Err(e) => eprintln!("Error checking {}: {}", path.display(), e),
-                },
+                }
                 Err(e) => eprintln!("Error: {}", e),
             }
         }
@@ -50,15 +52,15 @@ fn check(patterns: &[String]) -> io::Result<()> {
     Ok(())
 }
 
-fn check_file(path: &Path) -> io::Result<bool> {
+fn check_file(path: &Path) -> Result<bool> {
     let content = fs::read_to_string(path)?;
     let formatted = format_content(&content);
     Ok(content == formatted)
 }
 
-fn format(patterns: &[String]) -> io::Result<()> {
+fn format(patterns: &[String]) -> Result<()> {
     for pattern in patterns {
-        for entry in glob::glob(pattern).expect("Failed to read glob pattern") {
+        for entry in glob::glob(pattern)? {
             match entry {
                 Ok(path) => {
                     if let Err(e) = format_file(&path) {
@@ -72,7 +74,7 @@ fn format(patterns: &[String]) -> io::Result<()> {
     Ok(())
 }
 
-fn format_file(path: &Path) -> io::Result<()> {
+fn format_file(path: &Path) -> Result<()> {
     let content = fs::read_to_string(path)?;
     let formatted = format_content(&content);
     if content != formatted {
