@@ -266,7 +266,7 @@ mod tests {
     #[test]
     fn test_comment() {
         assert_eq!(
-            lex_ok("; This is a comment\n; With a trailing newline\n\n"),
+            lex_ok("; This is a comment; it includes an extra semicolon.\n; This one has a trailing newline\n\n"),
             vec![Token::Comment, Token::Comment, Token::Newline]
         );
         assert_eq!(lex_ok("; Comment without newline"), vec![Token::Comment]);
