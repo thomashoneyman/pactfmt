@@ -1,5 +1,3 @@
-pub mod lexer;
-
 use std::env;
 use std::error;
 use std::fs;
