@@ -1,0 +1,9 @@
+[package]
+name = "pactfmt"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+glob = "0.3.1"
+pactfmt-lib = { path = "../lib" }
+logos = "0.14.0"

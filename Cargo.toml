@@ -1,8 +1,6 @@
-[package]
-name = "pactfmt"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-glob = "0.3.1"
-logos = "0.14.0"
+[workspace]
+resolver = "2"
+members = [
+    "lib",
+    "bin",
+]
