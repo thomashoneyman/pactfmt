@@ -1,0 +1,22 @@
+(env-keys ["admin"])
+(env-data { "admin-keyset": ["admin"],
+            "alice": ["alice"],
+            "bob": ["bob"]
+          })
+(begin-tx)
+(load "critters.pact")
+(commit-tx)
+(use 'critters)
+(create-critter "0000000000")
+(create-critter "1111111111")
+(read critters "0")
+(show-critter "" (read critters "0"))
+(print (show-generation 0))
+(transfer-critter (read-keyset "alice") "0")
+(env-keys ["alice"])
+(show-generation 0)
+(initiate-transfer (read-keyset "bob") "0")
+;(cancel-transfer "0")
+(env-keys ["bob"])
+(complete-transfer "0")
+(combine-genes "1111111111" "0000000000")
