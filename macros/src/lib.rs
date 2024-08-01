@@ -68,7 +68,7 @@ fn generate_directory_benchmarks(
     path: String,
     stream: &mut TokenStream,
     args: &TestCorpusArgs,
-) -> () {
+) {
     for file in base.files.iter() {
         let name = file.file_name().unwrap().to_str().unwrap();
         let file_path = file.canonicalize().unwrap();
@@ -91,14 +91,10 @@ fn generate_directory_benchmarks(
     }
 }
 
-fn generate_directory_tests(
-    base: &Directory,
-    stream: &mut TokenStream,
-    args: &TestCorpusArgs,
-) -> () {
+fn generate_directory_tests(base: &Directory, stream: &mut TokenStream, args: &TestCorpusArgs) {
     for (name, dir) in base.children.iter() {
         let name = name.file_name().unwrap().to_str().unwrap();
-        let name = sanitize_ident(&name);
+        let name = sanitize_ident(name);
 
         let mut next_stream = TokenStream::new();
         generate_directory_tests(dir, &mut next_stream, args);
@@ -112,7 +108,7 @@ fn generate_directory_tests(
 
     for file in base.files.iter() {
         let name = file.file_name().unwrap().to_str().unwrap();
-        let name = format_ident!("{}", sanitize_ident(&name));
+        let name = format_ident!("{}", sanitize_ident(name));
         let path = file.canonicalize().unwrap();
         let path = path.to_str().unwrap();
         let function = &args.function;
