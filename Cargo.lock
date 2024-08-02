@@ -301,6 +301,17 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "logos",
+ "pactfmt-macros",
+]
+
+[[package]]
+name = "pactfmt-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "unicode-ident",
 ]
 
 [[package]]
