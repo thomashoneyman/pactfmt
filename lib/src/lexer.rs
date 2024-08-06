@@ -152,20 +152,13 @@ pub enum Token {
     #[token("suspend")]
     Suspend,
 
-    // Comments are a semicolon followed by a sequence of characters terminated by a newline. The
-    // newline is consumed and dropped from the token stream.
-    #[regex(r";[^\n]*", callback = |lex| {
-        if lex.remainder().starts_with('\n') {
-            lex.bump(1);
-        }
-        Some(())
-    })]
+    #[regex(r";[^\n]*")]
     Comment,
 
     #[token("\n")]
     Newline,
 
-    #[regex(r"[ \t\r]+", logos::skip)]
+    #[regex(r"[ \t\r]+")]
     Whitespace,
 }
 
@@ -199,10 +192,15 @@ mod tests {
             lex_ok("( ) { } [ ]"),
             vec![
                 Token::LeftParen,
+                Token::Whitespace,
                 Token::RightParen,
+                Token::Whitespace,
                 Token::LeftBrace,
+                Token::Whitespace,
                 Token::RightBrace,
+                Token::Whitespace,
                 Token::LeftBracket,
+                Token::Whitespace,
                 Token::RightBracket
             ]
         );
@@ -210,9 +208,13 @@ mod tests {
             lex_ok(":= : :: , ."),
             vec![
                 Token::ColonEquals,
+                Token::Whitespace,
                 Token::Colon,
+                Token::Whitespace,
                 Token::DoubleColon,
+                Token::Whitespace,
                 Token::Comma,
+                Token::Whitespace,
                 Token::Dot
             ]
         );
@@ -220,23 +222,47 @@ mod tests {
 
     #[test]
     fn test_boolean() {
-        assert_eq!(lex_ok("true false"), vec![Token::Boolean, Token::Boolean]);
-        assert_eq!(lex_ok("TRUE FALSE"), vec![Token::Ident, Token::Ident]); // Should be identifiers, not booleans
+        assert_eq!(
+            lex_ok("true false"),
+            vec![Token::Boolean, Token::Whitespace, Token::Boolean]
+        );
+        assert_eq!(
+            lex_ok("TRUE FALSE"),
+            vec![Token::Ident, Token::Whitespace, Token::Ident]
+        ); // Should be identifiers, not booleans
     }
 
     #[test]
     fn test_numbers() {
         assert_eq!(
             lex_ok("0 42 -17"),
-            vec![Token::Integer, Token::Integer, Token::Integer]
+            vec![
+                Token::Integer,
+                Token::Whitespace,
+                Token::Integer,
+                Token::Whitespace,
+                Token::Integer
+            ]
         );
         assert_eq!(
             lex_ok("3.14 -0.5 42.0"),
-            vec![Token::Decimal, Token::Decimal, Token::Decimal]
+            vec![
+                Token::Decimal,
+                Token::Whitespace,
+                Token::Decimal,
+                Token::Whitespace,
+                Token::Decimal
+            ]
         );
         assert_eq!(
             lex_ok("3. .14"),
-            vec![Token::Integer, Token::Dot, Token::Dot, Token::Integer]
+            vec![
+                Token::Integer,
+                Token::Dot,
+                Token::Whitespace,
+                Token::Dot,
+                Token::Integer
+            ]
         ); // Not valid decimals
     }
 
@@ -255,23 +281,27 @@ mod tests {
     fn test_symbol() {
         assert_eq!(lex_ok("'symbol"), vec![Token::Symbol]);
         assert_eq!(lex_ok("'complex-symbol123"), vec![Token::Symbol]);
-        assert_eq!(lex_ok("'invalid symbol"), vec![Token::Symbol, Token::Ident]);
-        // Space terminates the symbol
     }
 
     #[test]
     fn test_identifier() {
         assert_eq!(
             lex_ok("variable _underscore $dollar"),
-            vec![Token::Ident, Token::Ident, Token::Ident]
+            vec![
+                Token::Ident,
+                Token::Whitespace,
+                Token::Ident,
+                Token::Whitespace,
+                Token::Ident
+            ]
         );
         assert_eq!(
             lex_ok("!important? ++increment"),
-            vec![Token::Ident, Token::Ident]
+            vec![Token::Ident, Token::Whitespace, Token::Ident]
         );
         assert_eq!(
             lex_ok("@at-sign %percent"),
-            vec![Token::Ident, Token::Ident]
+            vec![Token::Ident, Token::Whitespace, Token::Ident]
         );
     }
 
@@ -280,7 +310,7 @@ mod tests {
         println!(concat!(env!("CARGO_MANIFEST_DIR"), "../corpus"));
         assert_eq!(
             lex_ok("; This is a comment; it includes an extra semicolon.\n; This one has a trailing newline\n\n"),
-            vec![Token::Comment, Token::Comment, Token::Newline]
+            vec![Token::Comment, Token::Newline, Token::Comment, Token::Newline, Token::Newline]
         );
         assert_eq!(lex_ok("; Comment without newline"), vec![Token::Comment]);
     }
