@@ -94,20 +94,18 @@ impl<'a> Parser<'a> {
 
     pub fn parse(&mut self) -> Result<Vec<PactTree>, String> {
         let mut results = Vec::new();
-        loop {
-            match self.peek() {
-                Some((Token::LeftParen, _)) => {
+
+        while let Some(token) = self.peek() {
+            match &token.0 {
+                Token::LeftParen => {
                     let def_const = self.parse_defconst()?;
                     results.push(PactTree::DefConst(def_const));
-                    continue;
                 }
-                Some((token, _)) => {
-                    return Err(format!("Expected left paren but received {:?}", token))
-                }
-                None => break,
+                token => return Err(format!("Expected left paren but received {:?}", token)),
             }
         }
-        return Ok(results);
+
+        Ok(results)
     }
 
     // Private helper functions for parsing
