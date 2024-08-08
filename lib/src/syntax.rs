@@ -218,9 +218,11 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_defconst(&mut self) -> Result<DefConst, String> {
+        self.expect(Token::LeftParen)?;
         self.expect(Token::DefConst)?;
         let name = self.parse_ident()?;
         let body = self.parse_expr()?;
+        self.expect(Token::RightParen)?;
 
         Ok(DefConst {
             name,
