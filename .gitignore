@@ -10,3 +10,6 @@ notes/
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+
+# Pact helpers
+.pact-history
