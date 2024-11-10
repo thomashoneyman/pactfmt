@@ -35,9 +35,9 @@ pub enum Token {
     #[token(".")]
     Dot,
 
-    #[token("true")]
-    #[token("false")]
-    Boolean,
+    #[token("true", |_| true)]
+    #[token("false", |_| false)]
+    Boolean(bool),
 
     #[token("let*")]
     LetRec,
@@ -132,37 +132,62 @@ pub enum Token {
     #[token("suspend")]
     Suspend,
 
-    #[regex(r"-?[0-9]+")]
-    Integer,
+    #[regex(r"-?[0-9]+", |lex| lex.slice().to_string())]
+    Integer(String),
 
-    #[regex(r"-?[0-9]+\.[0-9]+")]
-    Decimal,
+    #[regex(r"-?[0-9]+\.[0-9]+", |lex| lex.slice().to_string())]
+    Decimal(String),
 
     // A string which may contain internal escaped quotes like \"
-    #[regex(r#""(?:[^"\\]|\\.|\\[\n\r][^"])*""#)]
-    String,
-
-    #[regex(r#""{3}[^"]*"{3}"#)]
-    MultilineString,
+    #[regex(r#""(?:[^"\\]|\\.|\\[\n\r][^"])*""#, |lex| lex.slice().to_string())]
+    String(String),
 
     // A single-quoted string terminated by whitespace, a colon, dot, etc.
-    #[regex(r#"'[^\s\t\n\r,:.\"\'\[\]()]+"#)]
-    Symbol,
+    #[regex(r#"'[^\s\t\n\r,:.\"\'\[\]()]+"#, |lex| lex.slice().to_string())]
+    Symbol(String),
 
     // NOTE: This is a vague attempt to capture the many characters allowed in a Pact
     // identifier, though only ASCII, whereas a Pact identifier can also include arbitrary
     // unicode. Will almost certainly have to adjust this in the future.
     #[regex(
         r#"[a-zA-Z%#+\-_&$@<>=?*!|/][a-zA-Z0-9%#+\-_&$@<>=?*!|/]*"#,
-        priority = 1
-    )]
-    Ident,
+        priority = 1,
+        callback = |lex| lex.slice().to_string())]
+    Ident(String),
 
-    #[regex(r";[^\n]*")]
-    Comment,
+    #[regex(r";[^\n]*", |lex| lex.slice().to_string())]
+    Comment(String),
 
-    #[regex(r"\s+")]
-    Whitespace,
+    #[regex(r"\s+", |lex| lex.slice().to_string())]
+    Whitespace(String),
+}
+
+impl winnow::stream::ContainsToken<Token> for Token {
+    #[inline]
+    fn contains_token(&self, token: Token) -> bool {
+        *self == token
+    }
+}
+
+impl winnow::stream::ContainsToken<Token> for &'_ [Token] {
+    #[inline]
+    fn contains_token(&self, token: Token) -> bool {
+        self.iter().any(|t| *t == token)
+    }
+}
+
+impl<const LEN: usize> winnow::stream::ContainsToken<Token> for [Token; LEN] {
+    #[inline]
+    fn contains_token(&self, token: Token) -> bool {
+        self.iter().any(|t| *t == token)
+    }
+}
+
+impl<const LEN: usize> winnow::stream::ContainsToken<Token> for &'_ [Token; LEN] {
+    #[inline]
+    fn contains_token(&self, token: Token) -> bool {
+        self.iter().any(|t| *t == token)
+    }
 }
 
 #[cfg(test)]
@@ -201,8 +226,8 @@ mod tests {
       lex_double_colon: "::" => Token::DoubleColon,
       lex_comma: "," => Token::Comma,
       lex_dot: "." => Token::Dot,
-      lex_true: "true" => Token::Boolean,
-      lex_false: "false" => Token::Boolean,
+      lex_true: "true" => Token::Boolean(true),
+      lex_false: "false" => Token::Boolean(false),
       lex_let_rec: "let*" => Token::LetRec,
       lex_let: "let" => Token::Let,
       lex_if: "if" => Token::If,
@@ -236,18 +261,17 @@ mod tests {
       lex_suspend: "suspend" => Token::Suspend,
 
       // These entries use regex instead of full string matches
-      lex_integer: "42" => Token::Integer,
-      lex_neg_integer: "-42" => Token::Integer,
-      lex_decimal: "3.14" => Token::Decimal,
-      lex_neg_decimal: "-3.14" => Token::Decimal,
-      lex_ident: "add" => Token::Ident,
-      lex_complex_ident: "add-two!" => Token::Ident,
-      lex_string: "\"hello\"" => Token::String,
-      lex_escaped_string: "\"he\\\"llo\"" => Token::String,
-      lex_multiline: "\"\"\"multi\nline\"\"\"" => Token::MultilineString,
-      lex_symbol: "'mysym" => Token::Symbol,
-      lex_comment: "; comment" => Token::Comment,
-      lex_whitespace: "   " => Token::Whitespace,
-      lex_mixed_whitespace: " \t\n\r " => Token::Whitespace,
+      lex_integer: "42" => Token::Integer("42".into()),
+      lex_neg_integer: "-42" => Token::Integer("-42".into()),
+      lex_decimal: "3.14" => Token::Decimal("3.14".into()),
+      lex_neg_decimal: "-3.14" => Token::Decimal("-3.14".into()),
+      lex_ident: "add" => Token::Ident("add".into()),
+      lex_complex_ident: "add-two!" => Token::Ident("add-two!".into()),
+      lex_string: "\"hello\"" => Token::String("\"hello\"".into()),
+      lex_escaped_string: "\"he\\\"llo\"" => Token::String("\"he\\\"llo\"".into()),
+      lex_symbol: "'mysym" => Token::Symbol("'mysym".into()),
+      lex_comment: "; comment" => Token::Comment("; comment".into()),
+      lex_whitespace: "   " => Token::Whitespace("   ".into()),
+      lex_mixed_whitespace: " \t\n\r " => Token::Whitespace(" \t\n\r ".into()),
     }
 }

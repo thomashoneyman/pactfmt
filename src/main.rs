@@ -1,4 +1,6 @@
+mod cst;
 mod lexer;
+mod parser;
 
 use clap::{Parser, Subcommand};
 
