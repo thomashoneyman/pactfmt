@@ -1,4 +1,5 @@
 use logos::Logos;
+use pretty::RcDoc;
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Token {

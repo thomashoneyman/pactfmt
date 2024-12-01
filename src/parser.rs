@@ -248,3 +248,18 @@ fn test_defun_with_comments() {
     let result = defun.parse_next(&mut input);
     assert!(result.is_ok());
 }
+
+// #[test]
+// fn test_defun_pretty() {
+//     let tokens = lex("(defun f () x)");
+//     // (defun f ()
+//     //   x) 
+//     let mut input = tokens.as_slice();
+//     let Ok(Wrapped { middle, .. }) = defun.parse_next(&mut input) else {
+//         return;
+//     };
+//     let doc = middle.pretty();
+//     let mut buffer = String::new();
+//     doc.render_fmt(80, &mut buffer).expect("pretty printing");
+//     println!("{}", buffer);
+// }

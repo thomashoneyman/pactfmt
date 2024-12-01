@@ -1,3 +1,5 @@
+use pretty::RcDoc;
+
 use crate::lexer::Token;
 
 /// A type to hold positional information, including:
@@ -51,3 +53,8 @@ pub struct Defun {
     pub doc: Option<Doc>,
     pub body: Vec<Expr>,
 }
+
+// use nest to group stuff you want to keep together in a line??
+
+// group $ nest 2 $ do
+//   sequence_ [a, b, c]

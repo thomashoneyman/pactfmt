@@ -1,6 +1,7 @@
 mod cst;
 mod lexer;
 mod parser;
+mod pretty;
 
 use clap::{Parser, Subcommand};
 use std::io::{self, Read};
