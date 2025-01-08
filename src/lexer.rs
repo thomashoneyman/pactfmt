@@ -1,5 +1,10 @@
 use logos::Logos;
-use pretty::RcDoc;
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum WhitespaceKind {
+    Newline(String),
+    Spaces(String),
+}
 
 #[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Token {
@@ -159,8 +164,13 @@ pub enum Token {
     #[regex(r";[^\n]*", |lex| lex.slice().to_string())]
     Comment(String),
 
-    #[regex(r"\s+", |lex| lex.slice().to_string())]
-    Whitespace(String),
+    // We differentiate newlines from spaces in our whitespace lexing because it is
+    // important to separate them in our later pretty-printing. Our first kind of
+    // match works on Unix style or Windows style newlines, and the second on tab
+    // or space characters.
+    #[regex(r"\n|\r\n", |lex| WhitespaceKind::Newline(lex.slice().to_string()))]
+    #[regex(r"[ \t]+", |lex| WhitespaceKind::Spaces(lex.slice().to_string()))]
+    Whitespace(WhitespaceKind),
 }
 
 impl winnow::stream::ContainsToken<Token> for Token {
@@ -193,7 +203,7 @@ impl<const LEN: usize> winnow::stream::ContainsToken<Token> for &'_ [Token; LEN]
 
 #[cfg(test)]
 mod tests {
-    use super::Token;
+    use super::*;
     use logos::Logos;
 
     fn lex_single(input: &str) -> Token {
@@ -272,7 +282,24 @@ mod tests {
       lex_escaped_string: "\"he\\\"llo\"" => Token::String("\"he\\\"llo\"".into()),
       lex_symbol: "'mysym" => Token::Symbol("'mysym".into()),
       lex_comment: "; comment" => Token::Comment("; comment".into()),
-      lex_whitespace: "   " => Token::Whitespace("   ".into()),
-      lex_mixed_whitespace: " \t\n\r " => Token::Whitespace(" \t\n\r ".into()),
+      lex_spaces: "   " => Token::Whitespace(WhitespaceKind::Spaces("   ".into())),
+      lex_tabs: "\t\t" => Token::Whitespace(WhitespaceKind::Spaces("\t\t".into())),
+      lex_mixed_spaces_tabs: " \t " => Token::Whitespace(WhitespaceKind::Spaces(" \t ".into())),
+      lex_unix_newline: "\n" => Token::Whitespace(WhitespaceKind::Newline("\n".into())),
+      lex_windows_newline: "\r\n" => Token::Whitespace(WhitespaceKind::Newline("\r\n".into())),
+    }
+
+    #[test]
+    fn test_whitespace_sequence() {
+        let input = "  \n\t\t";
+        let tokens: Vec<_> = Token::lexer(input).collect::<Result<_, _>>().unwrap();
+        assert_eq!(
+            tokens,
+            vec![
+                Token::Whitespace(WhitespaceKind::Spaces("  ".into())),
+                Token::Whitespace(WhitespaceKind::Newline("\n".into())),
+                Token::Whitespace(WhitespaceKind::Spaces("\t\t".into())),
+            ]
+        );
     }
 }

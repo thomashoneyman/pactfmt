@@ -1,23 +1,25 @@
-use winnow::{
-    combinator::{opt, peek, repeat},
-    error::ContextError,
-    token::any,
-    PResult, Parser,
-};
+use winnow::combinator::{opt, peek, repeat};
+use winnow::error::ContextError;
+use winnow::prelude::*;
+use winnow::token::any;
 
 use crate::cst::*;
 use crate::lexer::Token;
+
+pub fn parse(input: &[Token]) -> PResult<Wrapped<Defun>> {
+    defun.parse_next(&mut input.into())
+}
 
 type Input<'a> = &'a [Token];
 
 /// Consumes consecutive whitespace and comment tokens into vectors,
 /// returning an empty vector if no whitespace or comments are found.
-pub fn whitespace_or_comment(input: &mut Input) -> PResult<Vec<String>> {
+pub fn whitespace_or_comment(input: &mut Input) -> PResult<Vec<Spacing>> {
     repeat(
         0..,
         any.verify_map(|tok| match tok {
-            Token::Whitespace(s) => Some(s),
-            Token::Comment(s) => Some(s),
+            Token::Whitespace(kind) => Some(Spacing::Whitespace(kind)),
+            Token::Comment(s) => Some(Spacing::Comment(s)),
             _ => None,
         }),
     )
@@ -98,7 +100,7 @@ fn expr(input: &mut Input) -> PResult<Expr> {
 }
 
 // Parse a wrapped function definition
-fn defun(input: &mut Input) -> PResult<Wrapped<Defun>> {
+pub fn defun(input: &mut Input) -> PResult<Wrapped<Defun>> {
     let defun_kw = positioned(any.verify(|t| *t == Token::Defun));
     let name = identifier;
     let args = arguments;
@@ -111,7 +113,6 @@ fn defun(input: &mut Input) -> PResult<Wrapped<Defun>> {
             defun,
             name,
             arguments,
-            doc: None,
             body,
         }),
         Token::RightParen,
@@ -120,146 +121,149 @@ fn defun(input: &mut Input) -> PResult<Wrapped<Defun>> {
 }
 
 #[cfg(test)]
-fn lex(input: &str) -> Vec<Token> {
+mod tests {
+    use super::*;
+    use crate::cst::Spacing;
+    use crate::lexer::{Token, WhitespaceKind};
     use logos::Logos;
-    Token::lexer(input).filter_map(|token| token.ok()).collect()
-}
 
-#[test]
-fn test_whitespace_or_comment() {
-    let tokens = lex(" ; hello\n");
-    let mut input = tokens.as_slice();
-    let result = whitespace_or_comment.parse_next(&mut input);
+    fn lex(input: &str) -> Vec<Token> {
+        Token::lexer(input).filter_map(|token| token.ok()).collect()
+    }
 
-    assert!(result.is_ok());
-    assert_eq!(
-        result.unwrap(),
-        vec![" ".to_string(), "; hello".to_string(), "\n".to_string()]
-    );
-}
+    #[test]
+    fn test_whitespace_or_comment() {
+        let tokens = lex(" ; hello\n");
+        let mut input = tokens.as_slice();
+        let result = whitespace_or_comment.parse_next(&mut input);
 
-#[test]
-fn test_identifier() {
-    let tokens = lex(" ; hello\nfoo ");
-    let mut input = tokens.as_slice();
-    let result = identifier.parse_next(&mut input);
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            vec![
+                Spacing::Whitespace(WhitespaceKind::Spaces(" ".into())),
+                Spacing::Comment("; hello".into()),
+                Spacing::Whitespace(WhitespaceKind::Newline("\n".into())),
+            ]
+        );
+    }
 
-    assert!(result.is_ok());
-    let (leading, fields, trailing) = result.unwrap();
-
-    assert_eq!(
-        leading,
-        vec![" ".to_string(), "; hello".to_string(), "\n".to_string()]
-    );
-    assert!(matches!(fields.identifier, Token::Ident(s) if s == "foo"));
-    assert_eq!(fields.type_annotation, None);
-    assert_eq!(trailing, vec![" ".to_string()]);
-}
-
-#[test]
-fn test_typed_identifier() {
-    let valid = [
-        "myvar:integer\n",
-        "myvar:{schema}\n",
-        "myvar:object{schema}\n",
-        "myvar:[*]\n",
-        "myvar:[integer]\n",
-    ];
-
-    for case in valid {
-        let tokens = lex(case);
+    #[test]
+    fn test_identifier() {
+        let tokens = lex(" ; hello\nfoo ");
         let mut input = tokens.as_slice();
         let result = identifier.parse_next(&mut input);
-        assert!(result.is_ok(), "Failed to parse valid case: {}", case);
+
+        assert!(result.is_ok());
+        let (leading, fields, trailing) = result.unwrap();
+        assert_eq!(
+            leading,
+            vec![
+                Spacing::Whitespace(WhitespaceKind::Spaces(" ".into())),
+                Spacing::Comment("; hello".into()),
+                Spacing::Whitespace(WhitespaceKind::Newline("\n".into())),
+            ]
+        );
+        assert!(matches!(fields.identifier, Token::Ident(s) if s == "foo"));
+        assert_eq!(fields.type_annotation, None);
+        assert_eq!(
+            trailing,
+            vec![Spacing::Whitespace(WhitespaceKind::Spaces(" ".into()))]
+        );
     }
-}
 
-#[test]
-fn test_empty_arguments() {
-    let tokens = lex("()");
-    let mut input = tokens.as_slice();
-    let result = arguments.parse_next(&mut input);
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap().middle.len(), 0);
-}
+    #[test]
+    fn test_typed_identifier() {
+        let valid = [
+            "myvar:integer\n",
+            "myvar:{schema}\n",
+            "myvar:object{schema}\n",
+            "myvar:[*]\n",
+            "myvar:[integer]\n",
+        ];
 
-#[test]
-fn test_single_argument() {
-    let tokens = lex("(arg:integer)");
-    let mut input = tokens.as_slice();
-    let result = arguments.parse_next(&mut input);
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap().middle.len(), 1);
-}
+        for case in valid {
+            let tokens = lex(case);
+            let mut input = tokens.as_slice();
+            let result = identifier.parse_next(&mut input);
+            assert!(result.is_ok(), "Failed to parse valid case: {}", case);
+        }
+    }
 
-#[test]
-fn test_multiple_arguments() {
-    let tokens = lex("(arg1:integer arg2 arg3:decimal)");
-    let mut input = tokens.as_slice();
-    let result = arguments.parse_next(&mut input);
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap().middle.len(), 3);
-}
+    #[test]
+    fn test_empty_arguments() {
+        let tokens = lex("()");
+        let mut input = tokens.as_slice();
+        let result = arguments.parse_next(&mut input);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().middle.len(), 0);
+    }
 
-#[test]
-fn test_minimal_defun() {
-    let tokens = lex("(defun f () x)");
-    let mut input = tokens.as_slice();
-    let result = defun.parse_next(&mut input);
-    assert!(result.is_ok());
+    #[test]
+    fn test_single_argument() {
+        let tokens = lex("(arg:integer)");
+        let mut input = tokens.as_slice();
+        let result = arguments.parse_next(&mut input);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().middle.len(), 1);
+    }
 
-    let wrapped = result.unwrap();
-    let defun = wrapped.middle;
-    assert_eq!(defun.body.len(), 1);
-}
+    #[test]
+    fn test_multiple_arguments() {
+        let tokens = lex("(arg1:integer arg2 arg3:decimal)");
+        let mut input = tokens.as_slice();
+        let result = arguments.parse_next(&mut input);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().middle.len(), 3);
+    }
 
-#[test]
-fn test_typed_defun() {
-    let tokens = lex("(defun add:integer (x:integer y:integer) x)");
-    let mut input = tokens.as_slice();
-    let result = defun.parse_next(&mut input);
-    assert!(result.is_ok());
+    #[test]
+    fn test_minimal_defun() {
+        let tokens = lex("(defun f () x)");
+        let mut input = tokens.as_slice();
+        let result = defun.parse_next(&mut input);
+        assert!(result.is_ok());
 
-    let wrapped = result.unwrap();
-    let defun = wrapped.middle;
-    assert_eq!(defun.arguments.middle.len(), 2);
-}
+        let wrapped = result.unwrap();
+        let defun = wrapped.middle;
+        assert_eq!(defun.body.len(), 1);
+    }
 
-#[test]
-fn test_defun_with_whitespace() {
-    let tokens = lex("
+    #[test]
+    fn test_typed_defun() {
+        let tokens = lex("(defun add:integer (x:integer y:integer) x)");
+        let mut input = tokens.as_slice();
+        let result = defun.parse_next(&mut input);
+        assert!(result.is_ok());
+
+        let wrapped = result.unwrap();
+        let defun = wrapped.middle;
+        assert_eq!(defun.arguments.middle.len(), 2);
+    }
+
+    #[test]
+    fn test_defun_with_whitespace() {
+        let tokens = lex("
         (defun add:integer
             (x:integer y:integer)
             x)
     ");
-    let mut input = tokens.as_slice();
-    let result = defun.parse_next(&mut input);
-    assert!(result.is_ok());
-}
+        let mut input = tokens.as_slice();
+        let result = defun.parse_next(&mut input);
+        assert!(result.is_ok());
+        let defun = result.unwrap().middle;
+        assert_eq!(defun.arguments.middle.len(), 2);
+    }
 
-#[test]
-fn test_defun_with_comments() {
-    let tokens = lex("
+    #[test]
+    fn test_defun_with_comments() {
+        let tokens = lex("
         (defun add:integer ; adds two numbers
             (x:integer y:integer) ; the parameters
             x) ; returns first param
     ");
-    let mut input = tokens.as_slice();
-    let result = defun.parse_next(&mut input);
-    assert!(result.is_ok());
+        let mut input = tokens.as_slice();
+        let result = defun.parse_next(&mut input);
+        assert!(result.is_ok());
+    }
 }
-
-// #[test]
-// fn test_defun_pretty() {
-//     let tokens = lex("(defun f () x)");
-//     // (defun f ()
-//     //   x) 
-//     let mut input = tokens.as_slice();
-//     let Ok(Wrapped { middle, .. }) = defun.parse_next(&mut input) else {
-//         return;
-//     };
-//     let doc = middle.pretty();
-//     let mut buffer = String::new();
-//     doc.render_fmt(80, &mut buffer).expect("pretty printing");
-//     println!("{}", buffer);
-// }

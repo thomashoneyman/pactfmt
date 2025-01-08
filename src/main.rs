@@ -4,6 +4,9 @@ mod parser;
 mod pretty;
 
 use clap::{Parser, Subcommand};
+use lexer::Token;
+use logos::Logos;
+use parser::parse;
 use std::io::{self, Read};
 
 #[derive(Debug, Parser)]
@@ -53,6 +56,10 @@ fn main() -> io::Result<()> {
                     buffer
                 }
             };
+            let lexed: Vec<_> = Token::lexer(&content)
+                .filter_map(|token| token.ok())
+                .collect();
+            println!("Parsed!\n{:?}", parse(&lexed));
             println!("Formatted!\n{}", content);
             Ok(())
         }
