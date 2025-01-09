@@ -70,8 +70,6 @@ impl Pretty for Token {
     }
 }
 
-// Don't love the duplication of Token here, but it's not clear how to share
-// the implementations without adding calls to `clone()`.
 impl Pretty for Spacing {
     fn pretty(&self) -> RcDoc<()> {
         match self {

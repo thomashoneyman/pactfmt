@@ -59,7 +59,7 @@ fn main() -> io::Result<()> {
             let lexed: Vec<_> = Token::lexer(&content)
                 .filter_map(|token| token.ok())
                 .collect();
-            println!("Parsed!\n{:?}", parse(&lexed));
+            println!("Parsed!\n{:?}", parse(&mut lexed.as_slice()));
             println!("Formatted!\n{}", content);
             Ok(())
         }

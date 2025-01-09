@@ -6,8 +6,8 @@ use winnow::token::any;
 use crate::cst::*;
 use crate::lexer::Token;
 
-pub fn parse(input: &[Token]) -> PResult<Wrapped<Defun>> {
-    defun.parse_next(&mut input.into())
+pub fn parse(input: &mut Input) -> PResult<Wrapped<Defun>> {
+    defun.parse_next(input)
 }
 
 type Input<'a> = &'a [Token];
