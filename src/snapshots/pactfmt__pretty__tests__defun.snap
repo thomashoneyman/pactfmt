@@ -1,0 +1,8 @@
+---
+source: src/pretty.rs
+expression: buffer
+---
+(defun
+ f
+ (x:integer y:integer)
+  x)
