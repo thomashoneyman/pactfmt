@@ -6,7 +6,7 @@ use winnow::token::any;
 use crate::cst::*;
 use crate::lexer::Token;
 
-pub fn parse(input: &mut Input) -> PResult<Wrapped<Defun>> {
+pub fn parse(input: &mut Input) -> PResult<Defun> {
     defun.parse_next(input)
 }
 
@@ -18,7 +18,13 @@ pub fn whitespace_or_comment(input: &mut Input) -> PResult<Vec<Spacing>> {
     repeat(
         0..,
         any.verify_map(|tok| match tok {
-            Token::Whitespace(kind) => Some(Spacing::Whitespace(kind)),
+            Token::Newlines(s) => {
+                if s.lines().count() > 1 {
+                    Some(Spacing::NewlineMany)
+                } else {
+                    Some(Spacing::NewlineOne)
+                }
+            }
             Token::Comment(s) => Some(Spacing::Comment(s)),
             _ => None,
         }),
@@ -26,14 +32,12 @@ pub fn whitespace_or_comment(input: &mut Input) -> PResult<Vec<Spacing>> {
     .parse_next(input)
 }
 
-/// Modifies a parser so it collects leading/trailing whitespace/comments
+/// Modifies a parser so it collects leading whitespace/comments
 pub fn positioned<'a, P, O>(parser: P) -> impl Parser<Input<'a>, Positioned<O>, ContextError>
 where
-    // Without constraints on `P` the compiler struggles to match `P` with the returned
-    // parser. Identical to the output type, except `O` is modified to be `Positioned`.
     P: Parser<Input<'a>, O, ContextError>,
 {
-    (whitespace_or_comment, parser, whitespace_or_comment)
+    (whitespace_or_comment, parser)
 }
 
 /// Modifies a parser to handle content wrapped in paired tokens (like parentheses),
@@ -77,7 +81,7 @@ pub fn identifier(input: &mut Input) -> PResult<Identifier> {
                 Token::Colon => Some(Token::Colon),
                 _ => None,
             }),
-            any.verify(|tok| !matches!(tok, Token::Whitespace(_) | Token::Comment(_))),
+            any.verify(|tok| !matches!(tok, Token::Newlines(_) | Token::Comment(_))),
         ))
         .map(|opt| opt.map(|(_, colon, ty)| (colon, ty))),
     )
@@ -100,31 +104,29 @@ fn expr(input: &mut Input) -> PResult<Expr> {
 }
 
 // Parse a wrapped function definition
-pub fn defun(input: &mut Input) -> PResult<Wrapped<Defun>> {
-    let defun_kw = positioned(any.verify(|t| *t == Token::Defun));
-    let name = identifier;
-    let args = arguments;
-    let body = repeat(1.., expr);
-    let inner_parser = (defun_kw, name, args, body);
+pub fn defun(input: &mut Input) -> PResult<Defun> {
+    let (left_paren, _) = positioned(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
+    let (defun, _) = positioned(any.verify(|t| *t == Token::Defun)).parse_next(input)?;
+    let name = identifier.parse_next(input)?;
+    let arguments = arguments.parse_next(input)?;
+    let body = repeat(1.., expr).parse_next(input)?;
+    let (right_paren, _) = positioned(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
 
-    wrapped(
-        Token::LeftParen,
-        inner_parser.map(|(defun, name, arguments, body)| Defun {
-            defun,
-            name,
-            arguments,
-            body,
-        }),
-        Token::RightParen,
-    )
-    .parse_next(input)
+    Ok(Defun {
+        left_paren,
+        defun,
+        name,
+        arguments,
+        body,
+        right_paren,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::cst::Spacing;
-    use crate::lexer::{Token, WhitespaceKind};
+    use crate::lexer::Token;
     use logos::Logos;
 
     fn lex(input: &str) -> Vec<Token> {
@@ -141,9 +143,9 @@ mod tests {
         assert_eq!(
             result.unwrap(),
             vec![
-                Spacing::Whitespace(WhitespaceKind::Spaces(" ".into())),
+                Spacing::Whitespace,
                 Spacing::Comment("; hello".into()),
-                Spacing::Whitespace(WhitespaceKind::Newline("\n".into())),
+                Spacing::Whitespace,
             ]
         );
     }
@@ -155,21 +157,17 @@ mod tests {
         let result = identifier.parse_next(&mut input);
 
         assert!(result.is_ok());
-        let (leading, fields, trailing) = result.unwrap();
+        let (leading, fields) = result.unwrap();
         assert_eq!(
             leading,
             vec![
-                Spacing::Whitespace(WhitespaceKind::Spaces(" ".into())),
+                Spacing::Whitespace,
                 Spacing::Comment("; hello".into()),
-                Spacing::Whitespace(WhitespaceKind::Newline("\n".into())),
+                Spacing::Whitespace,
             ]
         );
         assert!(matches!(fields.identifier, Token::Ident(s) if s == "foo"));
         assert_eq!(fields.type_annotation, None);
-        assert_eq!(
-            trailing,
-            vec![Spacing::Whitespace(WhitespaceKind::Spaces(" ".into()))]
-        );
     }
 
     #[test]
@@ -224,8 +222,7 @@ mod tests {
         let result = defun.parse_next(&mut input);
         assert!(result.is_ok());
 
-        let wrapped = result.unwrap();
-        let defun = wrapped.middle;
+        let defun = result.unwrap();
         assert_eq!(defun.body.len(), 1);
     }
 
@@ -236,8 +233,7 @@ mod tests {
         let result = defun.parse_next(&mut input);
         assert!(result.is_ok());
 
-        let wrapped = result.unwrap();
-        let defun = wrapped.middle;
+        let defun = result.unwrap();
         assert_eq!(defun.arguments.middle.len(), 2);
     }
 
@@ -251,7 +247,7 @@ mod tests {
         let mut input = tokens.as_slice();
         let result = defun.parse_next(&mut input);
         assert!(result.is_ok());
-        let defun = result.unwrap().middle;
+        let defun = result.unwrap();
         assert_eq!(defun.arguments.middle.len(), 2);
     }
 

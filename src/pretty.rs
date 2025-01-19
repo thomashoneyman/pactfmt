@@ -61,23 +61,15 @@ impl Pretty for Token {
             Token::String(ref str) => RcDoc::text(str),
             Token::Symbol(ref str) => RcDoc::text(str),
             Token::Ident(ref str) => RcDoc::text(str),
-            Token::Whitespace(ref kind) => match kind {
-                WhitespaceKind::Newline(_) => RcDoc::hardline(),
-                WhitespaceKind::Spaces(s) => RcDoc::text(s),
-            },
-            Token::Comment(ref s) => RcDoc::text(s),
-        }
-    }
-}
-
-impl Pretty for Spacing {
-    fn pretty(&self) -> RcDoc<()> {
-        match self {
-            Spacing::Whitespace(kind) => match kind {
-                WhitespaceKind::Newline(_) => RcDoc::hardline(),
-                WhitespaceKind::Spaces(s) => RcDoc::text(s),
-            },
-            Spacing::Comment(s) => RcDoc::text(s),
+            Token::Whitespace => {
+                unreachable!("invariant violated: whitespace was consumed as arbitrary token")
+            }
+            Token::Newlines(_) => {
+                unreachable!("invariant violated: newline was consumed as arbitrary token")
+            }
+            Token::Comment(_) => {
+                unreachable!("invariant violated: comment was consumed as arbitrary token")
+            }
         }
     }
 }

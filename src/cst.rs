@@ -1,16 +1,26 @@
-use crate::lexer::{Token, WhitespaceKind};
+use crate::lexer::Token;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Spacing {
-    Whitespace(WhitespaceKind),
+    // \n
+    NewlineOne,
+    // \n\n+
+    NewlineMany,
+    // \s+
+    Whitespace,
+    // ;.*
     Comment(String),
 }
+
+/// Spacing that comes before any given token.
+/// For arbitrary tokens, this is best paired like (PrefixSpacing, Token)
+/// But for tokens with known kinds such as '(', the field name usually suffices
+pub type PrefixSpacing = Vec<Spacing>;
 
 /// A type to hold positional information, including:
 ///   - Optional leading whitespace/comments
 ///   - The token
-///   - Optional trailing whitespace/comments
-pub type Positioned<T> = (Vec<Spacing>, T, Vec<Spacing>);
+pub type Positioned<T> = (PrefixSpacing, T);
 
 pub type PositionedToken = Positioned<Token>;
 
@@ -47,8 +57,10 @@ pub enum Expr {
 
 #[derive(Debug, PartialEq)]
 pub struct Defun {
-    pub defun: PositionedToken,
+    pub left_paren: PrefixSpacing,
+    pub defun: PrefixSpacing,
     pub name: Identifier,
     pub arguments: Wrapped<Vec<Identifier>>,
     pub body: Vec<Expr>,
+    pub right_paren: PrefixSpacing,
 }

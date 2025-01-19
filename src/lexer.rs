@@ -168,9 +168,14 @@ pub enum Token {
     // important to separate them in our later pretty-printing. Our first kind of
     // match works on Unix style or Windows style newlines, and the second on tab
     // or space characters.
-    #[regex(r"\n|\r\n", |lex| WhitespaceKind::Newline(lex.slice().to_string()))]
-    #[regex(r"[ \t]+", |lex| WhitespaceKind::Spaces(lex.slice().to_string()))]
-    Whitespace(WhitespaceKind),
+    // #[regex(r"\n|\r\n", |lex| WhitespaceKind::Newline(lex.slice().to_string()))]
+    // #[regex(r"[ \t]+", |lex| WhitespaceKind::Spaces(lex.slice().to_string()))]
+    // Whitespace(WhitespaceKind),
+    #[regex(r"(\n|\r\n)+", |lex| lex.slice().to_string())]
+    Newlines(String),
+
+    #[regex(r"[ \t]+")]
+    Whitespace,
 }
 
 impl winnow::stream::ContainsToken<Token> for Token {
@@ -282,11 +287,11 @@ mod tests {
       lex_escaped_string: "\"he\\\"llo\"" => Token::String("\"he\\\"llo\"".into()),
       lex_symbol: "'mysym" => Token::Symbol("'mysym".into()),
       lex_comment: "; comment" => Token::Comment("; comment".into()),
-      lex_spaces: "   " => Token::Whitespace(WhitespaceKind::Spaces("   ".into())),
-      lex_tabs: "\t\t" => Token::Whitespace(WhitespaceKind::Spaces("\t\t".into())),
-      lex_mixed_spaces_tabs: " \t " => Token::Whitespace(WhitespaceKind::Spaces(" \t ".into())),
-      lex_unix_newline: "\n" => Token::Whitespace(WhitespaceKind::Newline("\n".into())),
-      lex_windows_newline: "\r\n" => Token::Whitespace(WhitespaceKind::Newline("\r\n".into())),
+      lex_spaces: "   " => Token::Whitespace,
+      lex_tabs: "\t\t" => Token::Whitespace,
+      lex_mixed_spaces_tabs: " \t " => Token::Whitespace,
+      lex_unix_newline: "\n" => Token::Whitespace,
+      lex_windows_newline: "\r\n" => Token::Whitespace,
     }
 
     #[test]
@@ -296,9 +301,9 @@ mod tests {
         assert_eq!(
             tokens,
             vec![
-                Token::Whitespace(WhitespaceKind::Spaces("  ".into())),
-                Token::Whitespace(WhitespaceKind::Newline("\n".into())),
-                Token::Whitespace(WhitespaceKind::Spaces("\t\t".into())),
+                Token::Whitespace,
+                Token::Newlines("\n".into()),
+                Token::Whitespace,
             ]
         );
     }
