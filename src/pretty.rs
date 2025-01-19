@@ -169,24 +169,21 @@ mod tests {
     use crate::pretty::Pretty;
 
     use logos::Logos;
+    use test_each_file::test_each_file;
 
     fn lex(input: &str) -> Vec<Token> {
         Token::lexer(input).filter_map(|token| token.ok()).collect()
     }
 
-    #[test]
-    fn test_defun_pretty() {
-        let tokens = lex("(defun f (x:integer y:integer) x y)");
+    test_each_file! { in "./fixtures" => |content: &str| {
+        let tokens = lex(content);
         let mut input = tokens.as_slice();
-        let Ok(parsed) = parser::defun(&mut input) else {
-            return;
-        };
+        let parsed = parser::defun(&mut input).expect("parsing");
+
         let doc = parsed.pretty();
         let mut buffer = String::new();
         doc.render_fmt(80, &mut buffer).expect("pretty printing");
-        let expected = "(defun f (x:integer y:integer)
-  x
-  y)";
-        assert!(expected == buffer)
-    }
+
+        insta::assert_snapshot!(buffer);
+    }}
 }
