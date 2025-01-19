@@ -1,10 +1,28 @@
 use pretty::RcDoc;
 
 use crate::cst::*;
-use crate::lexer::{Token, WhitespaceKind};
+use crate::lexer::Token;
 
 pub trait Pretty {
     fn pretty(&self) -> RcDoc<()>;
+}
+
+pub fn format_spacing(spacing: &[Spacing]) -> RcDoc<()> {
+    if spacing.is_empty() {
+        return RcDoc::nil();
+    }
+
+    let docs: Vec<RcDoc<()>> = spacing
+        .iter()
+        .map(|s| match s {
+            Spacing::NewlineOne => RcDoc::hardline(),
+            Spacing::NewlineMany => RcDoc::hardline().append(RcDoc::hardline()),
+            Spacing::Whitespace => RcDoc::space(),
+            Spacing::Comment(text) => RcDoc::text(text),
+        })
+        .collect();
+
+    RcDoc::concat(docs)
 }
 
 impl Pretty for Token {
@@ -79,22 +97,8 @@ where
     T: Pretty,
 {
     fn pretty(&self) -> RcDoc<()> {
-        let leading: Vec<RcDoc<()>> = self.0.iter().map(Pretty::pretty).collect();
-        let trailing: Vec<RcDoc<()>> = self.2.iter().map(Pretty::pretty).collect();
-        RcDoc::intersperse(leading, RcDoc::line())
-            .append(self.1.pretty())
-            .append(RcDoc::intersperse(trailing, RcDoc::line()))
-    }
-}
-
-impl<T> Pretty for Wrapped<T>
-where
-    T: Pretty,
-{
-    fn pretty(&self) -> RcDoc<()> {
-        (self.left.pretty())
-            .append(self.middle.pretty())
-            .append(self.right.pretty())
+        let leading: RcDoc<()> = format_spacing(&self.0);
+        leading.append(self.1.pretty())
     }
 }
 
@@ -109,16 +113,6 @@ impl Pretty for IdentifierFields {
     }
 }
 
-fn pretty_arguments(args: &Wrapped<Vec<Identifier>>) -> RcDoc<()> {
-    RcDoc::text("(")
-        .append(
-            RcDoc::concat(args.middle.iter().map(Pretty::pretty))
-                .nest(2)
-                .group(),
-        )
-        .append(RcDoc::text(")"))
-}
-
 impl Pretty for Expr {
     fn pretty(&self) -> RcDoc<()> {
         match self {
@@ -127,35 +121,40 @@ impl Pretty for Expr {
     }
 }
 
-// Not sure how to handle trailing spaces right now — this is a hacky
-// temporary workaround, but we need proper handling.
-fn strip_trailing_space(doc: RcDoc<()>) -> RcDoc<()> {
-    let mut s = String::new();
-    doc.render_fmt(80, &mut s).unwrap();
-    RcDoc::text(s.trim_end().to_owned())
+impl Pretty for Arguments {
+    fn pretty(&self) -> RcDoc<()> {
+        let l_paren = format_spacing(&self.left_paren).append("(");
+        let r_paren = format_spacing(&self.right_paren).append(")");
+        let single = RcDoc::concat(self.args.iter().map(Pretty::pretty));
+        let multi =
+            RcDoc::intersperse(self.args.iter().map(Pretty::pretty), RcDoc::hardline()).nest(2);
+        let args = RcDoc::flat_alt(single, multi);
+
+        l_paren.append(args).append(r_paren)
+    }
 }
 
 impl Pretty for Defun {
     fn pretty(&self) -> RcDoc<()> {
-        let body = RcDoc::intersperse(
-            self.body
-                .iter()
-                .map(|expr| strip_trailing_space(expr.pretty())),
-            RcDoc::hardline(),
-        );
+        let l_paren = format_spacing(&self.left_paren).append("(");
+        let defun = format_spacing(&self.defun).append("defun");
+        let name = format_spacing(&self.name.0).append(self.name.1.pretty());
+        let body = RcDoc::concat(self.body.iter().map(Pretty::pretty));
+        let r_paren = format_spacing(&self.right_paren).append(")");
 
-        (self.defun.pretty())
-            .append(self.name.pretty())
-            .append(pretty_arguments(&self.arguments))
-            .append(RcDoc::hardline())
-            .append(body)
-            .nest(2)
-            .group()
+        l_paren
+            .append(defun)
+            .append(name)
+            .append(self.arguments.pretty())
+            .append(body.nest(2))
+            .append(r_paren)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     use crate::lexer::*;
     use crate::parser;
     use crate::pretty::Pretty;
@@ -178,4 +177,20 @@ mod tests {
 
         insta::assert_snapshot!(buffer);
     }}
+
+    #[test]
+    fn test_format_spacing() {
+        let spacing = vec![
+            Spacing::Whitespace,
+            Spacing::NewlineMany,
+            Spacing::Comment("; hello".to_string()),
+            Spacing::NewlineOne,
+        ];
+
+        let doc = format_spacing(&spacing);
+        let mut output = String::new();
+        doc.render_fmt(80, &mut output).unwrap();
+
+        assert_eq!(output, " \n\n; hello\n");
+    }
 }

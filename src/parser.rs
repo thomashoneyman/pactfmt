@@ -18,6 +18,7 @@ pub fn whitespace_or_comment(input: &mut Input) -> PResult<Vec<Spacing>> {
     repeat(
         0..,
         any.verify_map(|tok| match tok {
+            Token::Whitespace => Some(Spacing::Whitespace),
             Token::Newlines(s) => {
                 if s.lines().count() > 1 {
                     Some(Spacing::NewlineMany)
@@ -40,29 +41,6 @@ where
     (whitespace_or_comment, parser)
 }
 
-/// Modifies a parser to handle content wrapped in paired tokens (like parentheses),
-/// collecting leading/trailing whitespace/comments for both wrapper tokens
-pub fn wrapped<'a, P, O>(
-    left: Token,
-    parser: P,
-    right: Token,
-) -> impl Parser<Input<'a>, Wrapped<O>, ContextError>
-where
-    P: Parser<Input<'a>, O, ContextError>,
-{
-    // Not so sure about the `move` here
-    (
-        positioned(any.verify(move |t| *t == left)),
-        parser,
-        positioned(any.verify(move |t| *t == right)),
-    )
-        .map(|(l, m, r)| Wrapped {
-            left: l,
-            middle: m,
-            right: r,
-        })
-}
-
 /// Parse an identifier with an optional type annotation. We're pretty lenient
 /// on type annotations; they can be anything, so long as there is no whitespace
 /// around the colon which signifies an annotation.
@@ -81,7 +59,12 @@ pub fn identifier(input: &mut Input) -> PResult<Identifier> {
                 Token::Colon => Some(Token::Colon),
                 _ => None,
             }),
-            any.verify(|tok| !matches!(tok, Token::Newlines(_) | Token::Comment(_))),
+            any.verify(|tok| {
+                !matches!(
+                    tok,
+                    Token::Whitespace | Token::Newlines(_) | Token::Comment(_)
+                )
+            }),
         ))
         .map(|opt| opt.map(|(_, colon, ty)| (colon, ty))),
     )
@@ -94,8 +77,16 @@ pub fn identifier(input: &mut Input) -> PResult<Identifier> {
 }
 
 /// Parse an arguments list
-fn arguments(input: &mut Input) -> PResult<Wrapped<Vec<Identifier>>> {
-    wrapped(Token::LeftParen, repeat(0.., identifier), Token::RightParen).parse_next(input)
+fn arguments(input: &mut Input) -> PResult<Arguments> {
+    let (left_paren, _) = positioned(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
+    let args = repeat(0.., identifier).parse_next(input)?;
+    let (right_paren, _) = positioned(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
+
+    Ok(Arguments {
+        left_paren,
+        args,
+        right_paren,
+    })
 }
 
 // Parse an expression
@@ -145,7 +136,7 @@ mod tests {
             vec![
                 Spacing::Whitespace,
                 Spacing::Comment("; hello".into()),
-                Spacing::Whitespace,
+                Spacing::NewlineOne,
             ]
         );
     }
@@ -163,7 +154,7 @@ mod tests {
             vec![
                 Spacing::Whitespace,
                 Spacing::Comment("; hello".into()),
-                Spacing::Whitespace,
+                Spacing::NewlineOne,
             ]
         );
         assert!(matches!(fields.identifier, Token::Ident(s) if s == "foo"));
@@ -194,7 +185,7 @@ mod tests {
         let mut input = tokens.as_slice();
         let result = arguments.parse_next(&mut input);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().middle.len(), 0);
+        assert_eq!(result.unwrap().args.len(), 0);
     }
 
     #[test]
@@ -203,7 +194,7 @@ mod tests {
         let mut input = tokens.as_slice();
         let result = arguments.parse_next(&mut input);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().middle.len(), 1);
+        assert_eq!(result.unwrap().args.len(), 1);
     }
 
     #[test]
@@ -212,7 +203,7 @@ mod tests {
         let mut input = tokens.as_slice();
         let result = arguments.parse_next(&mut input);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().middle.len(), 3);
+        assert_eq!(result.unwrap().args.len(), 3);
     }
 
     #[test]
@@ -234,7 +225,7 @@ mod tests {
         assert!(result.is_ok());
 
         let defun = result.unwrap();
-        assert_eq!(defun.arguments.middle.len(), 2);
+        assert_eq!(defun.arguments.args.len(), 2);
     }
 
     #[test]
@@ -248,7 +239,7 @@ mod tests {
         let result = defun.parse_next(&mut input);
         assert!(result.is_ok());
         let defun = result.unwrap();
-        assert_eq!(defun.arguments.middle.len(), 2);
+        assert_eq!(defun.arguments.args.len(), 2);
     }
 
     #[test]

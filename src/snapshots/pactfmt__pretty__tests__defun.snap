@@ -1,8 +1,8 @@
 ---
 source: src/pretty.rs
 expression: buffer
-snapshot_kind: text
 ---
-(defun f (x:integer y:integer)
-  x
-  y)
+(defun
+ f
+ (x:integer y:integer)
+  x)

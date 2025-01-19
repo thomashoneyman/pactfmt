@@ -22,8 +22,6 @@ pub type PrefixSpacing = Vec<Spacing>;
 ///   - The token
 pub type Positioned<T> = (PrefixSpacing, T);
 
-pub type PositionedToken = Positioned<Token>;
-
 // pub enum Literal {
 //     String(String),
 //     Symbol(String),
@@ -32,15 +30,6 @@ pub type PositionedToken = Positioned<Token>;
 //     Boolean(String),
 //     Unit,
 // }
-
-// Technically, wrapped structures can only be parens, brackets, braces, etc.
-// so it's not an _arbitrary_ positioned token
-#[derive(Debug, PartialEq)]
-pub struct Wrapped<T> {
-    pub left: PositionedToken,
-    pub middle: T,
-    pub right: PositionedToken,
-}
 
 #[derive(Debug, PartialEq)]
 pub struct IdentifierFields {
@@ -56,11 +45,18 @@ pub enum Expr {
 }
 
 #[derive(Debug, PartialEq)]
+pub struct Arguments {
+    pub left_paren: PrefixSpacing,
+    pub args: Vec<Identifier>,
+    pub right_paren: PrefixSpacing,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct Defun {
     pub left_paren: PrefixSpacing,
     pub defun: PrefixSpacing,
     pub name: Identifier,
-    pub arguments: Wrapped<Vec<Identifier>>,
+    pub arguments: Arguments,
     pub body: Vec<Expr>,
     pub right_paren: PrefixSpacing,
 }

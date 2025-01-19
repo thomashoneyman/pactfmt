@@ -1,1 +1,4 @@
-(defun f (x:integer y:integer) x y)
+(defun
+  f
+  (x:integer y:integer)
+x)

@@ -1,11 +1,5 @@
 use logos::Logos;
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum WhitespaceKind {
-    Newline(String),
-    Spaces(String),
-}
-
 #[derive(Logos, Debug, PartialEq, Clone)]
 pub enum Token {
     #[token("{")]
@@ -161,21 +155,14 @@ pub enum Token {
         callback = |lex| lex.slice().to_string())]
     Ident(String),
 
-    #[regex(r";[^\n]*", |lex| lex.slice().to_string())]
-    Comment(String),
+    #[regex(r"[ \t]+")]
+    Whitespace,
 
-    // We differentiate newlines from spaces in our whitespace lexing because it is
-    // important to separate them in our later pretty-printing. Our first kind of
-    // match works on Unix style or Windows style newlines, and the second on tab
-    // or space characters.
-    // #[regex(r"\n|\r\n", |lex| WhitespaceKind::Newline(lex.slice().to_string()))]
-    // #[regex(r"[ \t]+", |lex| WhitespaceKind::Spaces(lex.slice().to_string()))]
-    // Whitespace(WhitespaceKind),
     #[regex(r"(\n|\r\n)+", |lex| lex.slice().to_string())]
     Newlines(String),
 
-    #[regex(r"[ \t]+")]
-    Whitespace,
+    #[regex(r";[^\n]*", |lex| lex.slice().to_string())]
+    Comment(String),
 }
 
 impl winnow::stream::ContainsToken<Token> for Token {
@@ -290,8 +277,8 @@ mod tests {
       lex_spaces: "   " => Token::Whitespace,
       lex_tabs: "\t\t" => Token::Whitespace,
       lex_mixed_spaces_tabs: " \t " => Token::Whitespace,
-      lex_unix_newline: "\n" => Token::Whitespace,
-      lex_windows_newline: "\r\n" => Token::Whitespace,
+      lex_unix_newline: "\n" => Token::Newlines("\n".into()),
+      lex_windows_newline: "\r\n" => Token::Newlines("\r\n".into()),
     }
 
     #[test]
