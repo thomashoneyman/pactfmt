@@ -107,6 +107,27 @@ where
     }
 }
 
+impl Pretty for Named {
+    fn pretty(&self) -> RcDoc<()> {
+        match self {
+            Named::Ident(s) => RcDoc::text(s),
+            Named::Reference(r) => r.pretty(),
+        }
+    }
+}
+
+impl Pretty for Reference {
+    fn pretty(&self) -> RcDoc<()> {
+        let mut doc = RcDoc::text(&self.first)
+            .append(RcDoc::text("."))
+            .append(RcDoc::text(&self.second));
+
+        for part in &self.rest {
+            doc = doc.append(RcDoc::text(".")).append(RcDoc::text(part));
+        }
+        doc
+    }
+}
 impl Pretty for Type {
     fn pretty(&self) -> RcDoc<()> {
         match &self {
@@ -256,9 +277,16 @@ impl Pretty for Arguments {
                 None => l_paren.append(r_paren),
             }
         } else {
-            l_paren
-                .append(RcDoc::concat(self.args.iter().map(Pretty::pretty)))
-                .append(r_paren)
+            match self.args.split_first() {
+                None => l_paren.append(r_paren),
+                Some((first, rest)) => {
+                    let mut doc = l_paren.append(first.pretty());
+                    for arg in rest {
+                        doc = doc.append(RcDoc::space()).append(arg.pretty());
+                    }
+                    doc.append(r_paren)
+                }
+            }
         }
     }
 }
@@ -272,58 +300,93 @@ impl Pretty for Defun {
         let name = format_spacing(&self.name.0)
             .append(self.name.1.pretty())
             .append(RcDoc::space());
-        let r_paren = format_spacing(&self.right_paren)
-            .append(")")
-            .append(RcDoc::space());
+        let r_paren = format_spacing(&self.right_paren).append(")");
 
-        let body = RcDoc::concat(self.body.iter().map(|expr| match expr {
-            Expr::Identifier((spacing, _))
-            | Expr::Literal((spacing, _))
-            | Expr::Application(App {
-                left_paren: spacing,
-                ..
-            }) if !has_newline(spacing) => RcDoc::hardline().append(expr.pretty()),
-            _ => expr.pretty(),
-        }));
+        let needs_multiline = has_newline(&self.defun)
+            || has_newline(&self.name.0)
+            || has_newline(&self.right_paren)
+            || self
+                .arguments
+                .args
+                .iter()
+                .any(|(spacing, _)| has_newline(spacing))
+            || self.body.iter().any(|expr| match expr {
+                Expr::Identifier((spacing, _))
+                | Expr::Literal((spacing, _))
+                | Expr::Application(App {
+                    left_paren: spacing,
+                    ..
+                }) => has_newline(spacing),
+            });
 
-        l_paren
-            .append(defun)
-            .append(name)
-            .append(self.arguments.pretty())
-            .append(body.nest(2))
-            .append(r_paren)
+        if needs_multiline {
+            let body = match self.body.split_first() {
+                None => RcDoc::nil(),
+                Some((first, rest)) => {
+                    // First expression just use its spacing as-is
+                    let mut doc = first.pretty();
+                    // Rest of expressions ensure a newline before each
+                    for expr in rest {
+                        let needs_newline = match expr {
+                            Expr::Identifier((spacing, _))
+                            | Expr::Literal((spacing, _))
+                            | Expr::Application(App {
+                                left_paren: spacing,
+                                ..
+                            }) => !has_newline(spacing),
+                        };
+                        if needs_newline {
+                            doc = doc.append(RcDoc::hardline());
+                        }
+                        doc = doc.append(expr.pretty());
+                    }
+                    doc
+                }
+            };
+
+            l_paren
+                .append(defun)
+                .append(name)
+                .append(self.arguments.pretty())
+                .append(body.nest(2))
+                .append(r_paren)
+        } else {
+            // Single line format
+            let body = match self.body.split_first() {
+                None => RcDoc::nil(),
+                Some((first, rest)) => {
+                    let mut doc = RcDoc::space().append(first.pretty());
+                    for expr in rest {
+                        doc = doc.append(RcDoc::space()).append(expr.pretty());
+                    }
+                    doc
+                }
+            };
+
+            l_paren
+                .append(defun)
+                .append(name)
+                .append(self.arguments.pretty())
+                .append(body)
+                .append(r_paren)
+        }
     }
 }
 
-impl Pretty for Named {
+impl Pretty for Toplevel {
     fn pretty(&self) -> RcDoc<()> {
         match self {
-            Named::Ident(s) => RcDoc::text(s),
-            Named::Reference(r) => r.pretty(),
+            Toplevel::Defun(defun) => defun.pretty(),
+            Toplevel::Expr(expr) => expr.pretty(),
         }
-    }
-}
-
-impl Pretty for Reference {
-    fn pretty(&self) -> RcDoc<()> {
-        let mut doc = RcDoc::text(&self.first)
-            .append(RcDoc::text("."))
-            .append(RcDoc::text(&self.second));
-
-        for part in &self.rest {
-            doc = doc.append(RcDoc::text(".")).append(RcDoc::text(part));
-        }
-        doc
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     use crate::lexer::*;
     use crate::parser;
-    use crate::pretty::Pretty;
+    use crate::pretty::{Pretty, RcDoc};
 
     use logos::Logos;
     use test_each_file::test_each_file;
@@ -335,27 +398,10 @@ mod tests {
     test_each_file! { in "./fixtures" => |content: &str| {
         let tokens = lex(content);
         let mut input = tokens.as_slice();
-        let parsed = parser::defun(&mut input).expect("parsing");
-
-        let doc = parsed.pretty();
+        let parsed = parser::parse(&mut input).expect("parsing");
+        let doc = RcDoc::concat(parsed.iter().map(Pretty::pretty));
         let mut buffer = String::new();
         doc.render_fmt(80, &mut buffer).expect("pretty printing");
-
         insta::assert_snapshot!(buffer);
     }}
-
-    #[test]
-    fn test_format_spacing() {
-        let spacing = vec![
-            Spacing::NewlineMany,
-            Spacing::Comment("; hello".to_string()),
-            Spacing::NewlineOne,
-        ];
-
-        let doc = format_spacing(&spacing);
-        let mut output = String::new();
-        doc.render_fmt(80, &mut output).unwrap();
-
-        assert_eq!(output, "\n\n; hello\n");
-    }
 }

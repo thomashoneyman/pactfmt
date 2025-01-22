@@ -6,8 +6,8 @@ use winnow::token::any;
 use crate::cst::*;
 use crate::lexer::Token;
 
-pub fn parse(input: &mut Input) -> PResult<Defun> {
-    defun.parse_next(input)
+pub fn parse(input: &mut Input) -> PResult<Vec<Toplevel>> {
+    repeat(0.., top_level).parse_next(input)
 }
 
 type Input<'a> = &'a [Token];
@@ -38,6 +38,57 @@ where
     P: Parser<Input<'a>, O, ContextError>,
 {
     (whitespace_or_comment, parser)
+}
+
+fn parse_reference(input: &mut Input) -> PResult<Reference> {
+    let first = any
+        .verify_map(|tok| match tok {
+            Token::Ident(s) => Some(s),
+            _ => None,
+        })
+        .parse_next(input)?;
+
+    any.verify(|tok| *tok == Token::Dot).parse_next(input)?;
+
+    let second = any
+        .verify_map(|tok| match tok {
+            Token::Ident(s) => Some(s),
+            _ => None,
+        })
+        .parse_next(input)?;
+
+    let mut rest = Vec::new();
+    while opt(any.verify(|tok| *tok == Token::Dot))
+        .parse_next(input)?
+        .is_some()
+    {
+        rest.push(
+            any.verify_map(|tok| match tok {
+                Token::Ident(s) => Some(s),
+                _ => None,
+            })
+            .parse_next(input)?,
+        );
+    }
+
+    Ok(Reference {
+        first,
+        second,
+        rest,
+    })
+}
+
+fn parse_named(input: &mut Input) -> PResult<Named> {
+    alt((
+        // Try reference first since it's more specific
+        parse_reference.map(Named::Reference),
+        // Fall back to simple identifier
+        any.verify_map(|tok| match tok {
+            Token::Ident(s) => Some(Named::Ident(s)),
+            _ => None,
+        }),
+    ))
+    .parse_next(input)
 }
 
 /// Parse a type annotation
@@ -190,55 +241,8 @@ pub fn defun(input: &mut Input) -> PResult<Defun> {
     })
 }
 
-fn parse_reference(input: &mut Input) -> PResult<Reference> {
-    let first = any
-        .verify_map(|tok| match tok {
-            Token::Ident(s) => Some(s),
-            _ => None,
-        })
-        .parse_next(input)?;
-
-    any.verify(|tok| *tok == Token::Dot).parse_next(input)?;
-
-    let second = any
-        .verify_map(|tok| match tok {
-            Token::Ident(s) => Some(s),
-            _ => None,
-        })
-        .parse_next(input)?;
-
-    let mut rest = Vec::new();
-    while opt(any.verify(|tok| *tok == Token::Dot))
-        .parse_next(input)?
-        .is_some()
-    {
-        rest.push(
-            any.verify_map(|tok| match tok {
-                Token::Ident(s) => Some(s),
-                _ => None,
-            })
-            .parse_next(input)?,
-        );
-    }
-
-    Ok(Reference {
-        first,
-        second,
-        rest,
-    })
-}
-
-fn parse_named(input: &mut Input) -> PResult<Named> {
-    alt((
-        // Try reference first since it's more specific
-        parse_reference.map(Named::Reference),
-        // Fall back to simple identifier
-        any.verify_map(|tok| match tok {
-            Token::Ident(s) => Some(Named::Ident(s)),
-            _ => None,
-        }),
-    ))
-    .parse_next(input)
+fn top_level(input: &mut Input) -> PResult<Toplevel> {
+    alt((defun.map(Toplevel::Defun), expr.map(Toplevel::Expr))).parse_next(input)
 }
 
 #[cfg(test)]

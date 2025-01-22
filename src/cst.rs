@@ -93,3 +93,9 @@ pub struct Defun {
     pub body: Vec<Expr>,
     pub right_paren: PrefixSpacing,
 }
+
+#[derive(Debug, PartialEq)]
+pub enum Toplevel {
+    Defun(Defun),
+    Expr(Expr),
+}
