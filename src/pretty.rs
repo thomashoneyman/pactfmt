@@ -108,13 +108,42 @@ where
     }
 }
 
+impl Pretty for Type {
+    fn pretty(&self) -> RcDoc<()> {
+        match &self {
+            Type::Ident(s) => RcDoc::text(s),
+            Type::List(ty) => RcDoc::text("[")
+                .append(ty.pretty())
+                .append(RcDoc::text("]")),
+            Type::Object(ty) => RcDoc::text("object{")
+                .append(RcDoc::text(ty.as_deref().unwrap_or("")))
+                .append(RcDoc::text("}")),
+            Type::Schema(ty) => RcDoc::text("{")
+                .append(RcDoc::text(ty))
+                .append(RcDoc::text("}")),
+            Type::Module(parts) => {
+                let mut doc = RcDoc::text("module{");
+                let mut first = true;
+                for part in parts {
+                    if !first {
+                        doc = doc.append(RcDoc::text(","));
+                    }
+                    doc = doc.append(part.pretty());
+                    first = false;
+                }
+                doc.append(RcDoc::text("}"))
+            }
+        }
+    }
+}
+
 impl Pretty for IdentifierFields {
     fn pretty(&self) -> RcDoc<()> {
         match self.type_annotation {
-            None => self.identifier.pretty(),
-            Some(ref toks) => (self.identifier.pretty())
-                .append(toks.0.pretty())
-                .append(toks.1.pretty()),
+            None => RcDoc::text(&self.identifier),
+            Some(ref ty) => RcDoc::text(&self.identifier)
+                .append(RcDoc::text(":"))
+                .append(ty.pretty()),
         }
     }
 }
@@ -247,6 +276,28 @@ impl Pretty for Defun {
             .append(self.arguments.pretty())
             .append(body.nest(2))
             .append(r_paren)
+    }
+}
+
+impl Pretty for Named {
+    fn pretty(&self) -> RcDoc<()> {
+        match self {
+            Named::Ident(s) => RcDoc::text(s),
+            Named::Reference(r) => r.pretty(),
+        }
+    }
+}
+
+impl Pretty for Reference {
+    fn pretty(&self) -> RcDoc<()> {
+        let mut doc = RcDoc::text(&self.first)
+            .append(RcDoc::text("."))
+            .append(RcDoc::text(&self.second));
+
+        for part in &self.rest {
+            doc = doc.append(RcDoc::text(".")).append(RcDoc::text(part));
+        }
+        doc
     }
 }
 

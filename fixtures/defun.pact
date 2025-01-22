@@ -1,6 +1,6 @@
 (defun f
-(x:integer
-          y:integer) (+
+(x:object{schema}
+          y:[integer]) (+
     x
         (write y 1.0))
 

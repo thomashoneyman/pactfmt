@@ -1,5 +1,3 @@
-use crate::lexer::Token;
-
 #[derive(Debug, PartialEq, Clone)]
 pub enum Spacing {
     NewlineOne,
@@ -29,10 +27,38 @@ pub enum LiteralValue {
 
 pub type Literal = Positioned<LiteralValue>;
 
+/// A reference like "my-mod.my-name" or "a.b.c.d"
+#[derive(Debug, Clone, PartialEq)]
+pub struct Reference {
+    pub first: String,
+    pub second: String,
+    pub rest: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Named {
+    Ident(String),
+    Reference(Reference),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Type {
+    /// Simple identifier type like :integer or :time
+    Ident(String),
+    /// List type like [integer] or [object{schema}]
+    List(Box<Type>),
+    /// Object type like object{schema} or object{}
+    Object(Option<String>),
+    /// Schema type like {schema}
+    Schema(String),
+    /// Module type like module{schema,other.schema}
+    Module(Vec<Named>),
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct IdentifierFields {
-    pub identifier: Token,
-    pub type_annotation: Option<(Token, Token)>,
+    pub identifier: String,
+    pub type_annotation: Option<Type>,
 }
 
 pub type Identifier = Positioned<IdentifierFields>;

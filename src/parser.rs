@@ -1,4 +1,4 @@
-use winnow::combinator::{alt, opt, peek, repeat};
+use winnow::combinator::{alt, not, opt, peek, repeat, separated};
 use winnow::error::ContextError;
 use winnow::prelude::*;
 use winnow::token::any;
@@ -41,37 +41,83 @@ where
     (whitespace_or_comment, parser)
 }
 
-/// Parse an identifier with an optional type annotation. We're pretty lenient
-/// on type annotations; they can be anything, so long as there is no whitespace
-/// around the colon which signifies an annotation.
-pub fn identifier(input: &mut Input) -> PResult<Identifier> {
-    let ident_with_type = (
-        // First get the identifier
-        any.verify_map(|tok| match tok {
-            Token::Ident(s) => Some(Token::Ident(s)),
-            _ => None,
-        }),
-        // Then handle optional type annotation
-        opt((
-            // Only succeed if next token is colon (no whitespace)
-            peek(any.verify(|tok| matches!(tok, Token::Colon))),
+/// Parse a type annotation
+fn type_annotation(input: &mut Input) -> PResult<Type> {
+    alt((
+        // Module type: module{mod,name}
+        (
+            any.verify(|tok| *tok == Token::Module),
+            any.verify(|tok| *tok == Token::LeftBrace),
+            separated(0.., parse_named, any.verify(|tok| *tok == Token::Comma)),
+            any.verify(|tok| *tok == Token::RightBrace),
+        )
+            .map(|(_, _, refs, _)| Type::Module(refs)),
+        // Object type: object{schema}
+        (
+            any.verify(|tok| *tok == Token::Ident("object".into())),
+            any.verify(|tok| *tok == Token::LeftBrace),
+            opt(any.verify_map(|tok| match tok {
+                Token::Ident(s) => Some(s),
+                _ => None,
+            })),
+            any.verify(|tok| *tok == Token::RightBrace),
+        )
+            .map(|(_, _, ty, _)| Type::Object(ty)),
+        // List type: [integer] or [object{schema}] etc.
+        (
+            any.verify(|tok| *tok == Token::LeftBracket),
+            type_annotation,
+            any.verify(|tok| *tok == Token::RightBracket),
+        )
+            .map(|(_, ty, _)| Type::List(Box::new(ty))),
+        // Schema type: {schema}
+        (
+            any.verify(|tok| *tok == Token::LeftBrace),
             any.verify_map(|tok| match tok {
-                Token::Colon => Some(Token::Colon),
+                Token::Ident(s) => Some(s),
                 _ => None,
             }),
-            any.verify(|tok| {
-                !matches!(
-                    tok,
-                    Token::Whitespace | Token::Newlines(_) | Token::Comment(_)
-                )
+            any.verify(|tok| *tok == Token::RightBrace),
+        )
+            .map(|(_, ty, _)| Type::Schema(ty)),
+        // Simple type: integer
+        any.verify_map(|tok| match tok {
+            Token::Ident(s) => Some(Type::Ident(s)),
+            _ => None,
+        }),
+    ))
+    .parse_next(input)
+}
+
+/// Parse an identifier with an optional type annotation
+pub fn identifier(input: &mut Input) -> PResult<Identifier> {
+    let ident_with_type = alt((
+        // Just an identifier with no type
+        (
+            any.verify_map(|tok| match tok {
+                Token::Ident(s) => Some(s),
+                _ => None,
             }),
-        ))
-        .map(|opt| opt.map(|(_, colon, ty)| (colon, ty))),
-    )
-        .map(|(id, type_ann)| IdentifierFields {
-            identifier: id,
-            type_annotation: type_ann,
-        });
+            peek(not(any.verify(|tok| *tok == Token::Colon))),
+        )
+            .map(|(id, _)| IdentifierFields {
+                identifier: id,
+                type_annotation: None,
+            }),
+        // Identifier with required type annotation
+        (
+            any.verify_map(|tok| match tok {
+                Token::Ident(s) => Some(s),
+                _ => None,
+            }),
+            any.verify(|tok| *tok == Token::Colon),
+            type_annotation,
+        )
+            .map(|(id, _, ty)| IdentifierFields {
+                identifier: id,
+                type_annotation: Some(ty),
+            }),
+    ));
 
     positioned(ident_with_type).parse_next(input)
 }
@@ -223,6 +269,57 @@ pub fn defun(input: &mut Input) -> PResult<Defun> {
     })
 }
 
+fn parse_reference(input: &mut Input) -> PResult<Reference> {
+    let first = any
+        .verify_map(|tok| match tok {
+            Token::Ident(s) => Some(s),
+            _ => None,
+        })
+        .parse_next(input)?;
+
+    any.verify(|tok| *tok == Token::Dot).parse_next(input)?;
+
+    let second = any
+        .verify_map(|tok| match tok {
+            Token::Ident(s) => Some(s),
+            _ => None,
+        })
+        .parse_next(input)?;
+
+    let mut rest = Vec::new();
+    while opt(any.verify(|tok| *tok == Token::Dot))
+        .parse_next(input)?
+        .is_some()
+    {
+        rest.push(
+            any.verify_map(|tok| match tok {
+                Token::Ident(s) => Some(s),
+                _ => None,
+            })
+            .parse_next(input)?,
+        );
+    }
+
+    Ok(Reference {
+        first,
+        second,
+        rest,
+    })
+}
+
+fn parse_named(input: &mut Input) -> PResult<Named> {
+    alt((
+        // Try reference first since it's more specific
+        parse_reference.map(Named::Reference),
+        // Fall back to simple identifier
+        any.verify_map(|tok| match tok {
+            Token::Ident(s) => Some(Named::Ident(s)),
+            _ => None,
+        }),
+    ))
+    .parse_next(input)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -267,7 +364,7 @@ mod tests {
                 Spacing::NewlineOne,
             ]
         );
-        assert!(matches!(fields.identifier, Token::Ident(s) if s == "foo"));
+        assert!(matches!(fields.identifier, s if s == "foo"));
         assert_eq!(fields.type_annotation, None);
     }
 
@@ -401,6 +498,59 @@ mod tests {
         let result = expr.parse_next(&mut input);
         assert!(result.is_ok());
         assert!(matches!(result.unwrap(), Expr::Identifier(_)));
+    }
+
+    #[test]
+    fn test_type_annotations() {
+        let test_cases = [
+            ("wot:integer", Type::Ident("integer".into())),
+            (
+                "wot:[integer]",
+                Type::List(Box::new(Type::Ident("integer".into()))),
+            ),
+            (
+                "wot:[[integer]]",
+                Type::List(Box::new(Type::List(Box::new(Type::Ident(
+                    "integer".into(),
+                ))))),
+            ),
+            ("wot:{schema}", Type::Schema("schema".into())),
+            ("wot:object{schema}", Type::Object(Some("schema".into()))),
+            ("wot:object{}", Type::Object(None)),
+            (
+                "wot:module{schema}",
+                Type::Module(vec![Named::Ident("schema".into())]),
+            ),
+            (
+                "wot:module{one,two}",
+                Type::Module(vec![Named::Ident("one".into()), Named::Ident("two".into())]),
+            ),
+            (
+                "wot:module{a.b,c.d.e}",
+                Type::Module(vec![
+                    Named::Reference(Reference {
+                        first: "a".into(),
+                        second: "b".into(),
+                        rest: vec![],
+                    }),
+                    Named::Reference(Reference {
+                        first: "c".into(),
+                        second: "d".into(),
+                        rest: vec!["e".into()],
+                    }),
+                ]),
+            ),
+            ("wot:module{}", Type::Module(vec![])),
+        ];
+
+        for (input, expected_type) in test_cases {
+            let tokens = lex(input);
+            let mut input = tokens.as_slice();
+            let result = identifier.parse_next(&mut input);
+            assert!(result.is_ok(), "Failed to parse: {:?}", input);
+            let (_, fields) = result.unwrap();
+            assert_eq!(fields.type_annotation.unwrap(), expected_type);
+        }
     }
 
     #[test]
