@@ -18,7 +18,6 @@ pub fn whitespace_or_comment(input: &mut Input) -> PResult<Vec<Spacing>> {
     repeat(
         0..,
         any.verify_map(|tok| match tok {
-            Token::Whitespace => Some(Spacing::Whitespace),
             Token::Newlines(s) => {
                 if s.lines().count() > 1 {
                     Some(Spacing::NewlineMany)
@@ -141,29 +140,6 @@ fn arguments(input: &mut Input) -> PResult<Arguments> {
     let args: Vec<Identifier> = repeat(0.., identifier).parse_next(input)?;
     let (right_paren, _) = positioned(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
 
-    // We remove whitespace preemptively because we have strict rules around
-    // printing lists of arguments.
-    let left_paren = left_paren
-        .into_iter()
-        .filter(|s| !matches!(s, Spacing::Whitespace))
-        .collect();
-    let args = args
-        .into_iter()
-        .map(|(spacing, fields)| {
-            (
-                spacing
-                    .into_iter()
-                    .filter(|s| !matches!(s, Spacing::Whitespace))
-                    .collect(),
-                fields,
-            )
-        })
-        .collect();
-    let right_paren = right_paren
-        .into_iter()
-        .filter(|s| !matches!(s, Spacing::Whitespace))
-        .collect();
-
     Ok(Arguments {
         left_paren,
         args,
@@ -177,37 +153,6 @@ fn app(input: &mut Input) -> PResult<App> {
     let func = Box::new(expr.parse_next(input)?);
     let args: Vec<Expr> = repeat(0.., expr).parse_next(input)?;
     let (right_paren, _) = positioned(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
-
-    // We remove whitespace preemptively because we have strict rules around
-    // printing lists of arguments.
-    let left_paren = left_paren
-        .into_iter()
-        .filter(|s| !matches!(s, Spacing::Whitespace))
-        .collect();
-    let args = args
-        .into_iter()
-        .map(|expr| match expr {
-            Expr::Identifier((spacing, fields)) => Expr::Identifier((
-                spacing
-                    .into_iter()
-                    .filter(|s| !matches!(s, Spacing::Whitespace))
-                    .collect(),
-                fields,
-            )),
-            Expr::Literal((spacing, value)) => Expr::Literal((
-                spacing
-                    .into_iter()
-                    .filter(|s| !matches!(s, Spacing::Whitespace))
-                    .collect(),
-                value,
-            )),
-            Expr::Application(app) => Expr::Application(app),
-        })
-        .collect();
-    let right_paren = right_paren
-        .into_iter()
-        .filter(|s| !matches!(s, Spacing::Whitespace))
-        .collect();
 
     Ok(App {
         left_paren,
@@ -232,32 +177,8 @@ pub fn defun(input: &mut Input) -> PResult<Defun> {
     let (defun, _) = positioned(any.verify(|t| *t == Token::Defun)).parse_next(input)?;
     let name = identifier.parse_next(input)?;
     let arguments = arguments.parse_next(input)?;
-    let body: Vec<Expr> = repeat(1.., expr).parse_next(input)?;
-    let body = body
-        .into_iter()
-        .map(|expr| match expr {
-            Expr::Identifier((spacing, fields)) => Expr::Identifier((
-                spacing
-                    .into_iter()
-                    .filter(|s| !matches!(s, Spacing::Whitespace))
-                    .collect(),
-                fields,
-            )),
-            Expr::Literal((spacing, value)) => Expr::Literal((
-                spacing
-                    .into_iter()
-                    .filter(|s| !matches!(s, Spacing::Whitespace))
-                    .collect(),
-                value,
-            )),
-            Expr::Application(app) => Expr::Application(app),
-        })
-        .collect();
+    let body = repeat(1.., expr).parse_next(input)?;
     let (right_paren, _) = positioned(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
-    let right_paren = right_paren
-        .into_iter()
-        .filter(|s| !matches!(s, Spacing::Whitespace))
-        .collect();
 
     Ok(Defun {
         left_paren,
@@ -340,11 +261,7 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap(),
-            vec![
-                Spacing::Whitespace,
-                Spacing::Comment("; hello".into()),
-                Spacing::NewlineOne,
-            ]
+            vec![Spacing::Comment("; hello".into()), Spacing::NewlineOne]
         );
     }
 
@@ -358,11 +275,7 @@ mod tests {
         let (leading, fields) = result.unwrap();
         assert_eq!(
             leading,
-            vec![
-                Spacing::Whitespace,
-                Spacing::Comment("; hello".into()),
-                Spacing::NewlineOne,
-            ]
+            vec![Spacing::Comment("; hello".into()), Spacing::NewlineOne,]
         );
         assert!(matches!(fields.identifier, s if s == "foo"));
         assert_eq!(fields.type_annotation, None);
@@ -481,12 +394,7 @@ mod tests {
         let (spacing, value) = result.unwrap();
         assert_eq!(
             spacing,
-            vec![
-                Spacing::Whitespace,
-                Spacing::Comment("; comment".into()),
-                Spacing::NewlineOne,
-                Spacing::Whitespace,
-            ]
+            vec![Spacing::Comment("; comment".into()), Spacing::NewlineOne]
         );
         assert!(matches!(value, LiteralValue::Integer(s) if s == "42"));
     }

@@ -17,7 +17,6 @@ fn format_spacing(spacing: &[Spacing]) -> RcDoc<()> {
         .map(|s| match s {
             Spacing::NewlineOne => RcDoc::hardline(),
             Spacing::NewlineMany => RcDoc::hardline().append(RcDoc::hardline()),
-            Spacing::Whitespace => RcDoc::space(),
             Spacing::Comment(text) => RcDoc::text(text),
         })
         .collect();
@@ -197,10 +196,20 @@ impl Pretty for App {
                 .append(args_doc)
                 .append(r_paren)
         } else {
+            let args = match self.args.split_first() {
+                None => RcDoc::nil(),
+                Some((first, rest)) => {
+                    let mut doc = RcDoc::space().append(first.pretty());
+                    for arg in rest {
+                        doc = doc.append(RcDoc::space()).append(arg.pretty());
+                    }
+                    doc
+                }
+            };
+
             l_paren
                 .append(self.func.pretty())
-                .append(RcDoc::space())
-                .append(RcDoc::concat(self.args.iter().map(Pretty::pretty)))
+                .append(args)
                 .append(r_paren)
         }
     }
@@ -256,9 +265,15 @@ impl Pretty for Arguments {
 impl Pretty for Defun {
     fn pretty(&self) -> RcDoc<()> {
         let l_paren = format_spacing(&self.left_paren).append("(");
-        let defun = format_spacing(&self.defun).append("defun");
-        let name = format_spacing(&self.name.0).append(self.name.1.pretty());
-        let r_paren = format_spacing(&self.right_paren).append(")");
+        let defun = format_spacing(&self.defun)
+            .append("defun")
+            .append(RcDoc::space());
+        let name = format_spacing(&self.name.0)
+            .append(self.name.1.pretty())
+            .append(RcDoc::space());
+        let r_paren = format_spacing(&self.right_paren)
+            .append(")")
+            .append(RcDoc::space());
 
         let body = RcDoc::concat(self.body.iter().map(|expr| match expr {
             Expr::Identifier((spacing, _))
@@ -331,7 +346,6 @@ mod tests {
     #[test]
     fn test_format_spacing() {
         let spacing = vec![
-            Spacing::Whitespace,
             Spacing::NewlineMany,
             Spacing::Comment("; hello".to_string()),
             Spacing::NewlineOne,
@@ -341,6 +355,6 @@ mod tests {
         let mut output = String::new();
         doc.render_fmt(80, &mut output).unwrap();
 
-        assert_eq!(output, " \n\n; hello\n");
+        assert_eq!(output, "\n\n; hello\n");
     }
 }

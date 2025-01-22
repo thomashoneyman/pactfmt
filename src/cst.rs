@@ -2,7 +2,6 @@
 pub enum Spacing {
     NewlineOne,
     NewlineMany,
-    Whitespace,
     Comment(String),
 }
 
