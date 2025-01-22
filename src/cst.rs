@@ -2,13 +2,9 @@ use crate::lexer::Token;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Spacing {
-    // \n
     NewlineOne,
-    // \n\n+
     NewlineMany,
-    // \s+
     Whitespace,
-    // ;.*
     Comment(String),
 }
 
@@ -22,16 +18,18 @@ pub type PrefixSpacing = Vec<Spacing>;
 ///   - The token
 pub type Positioned<T> = (PrefixSpacing, T);
 
-// pub enum Literal {
-//     String(String),
-//     Symbol(String),
-//     Integer(String),
-//     Decimal(String),
-//     Boolean(String),
-//     Unit,
-// }
+#[derive(Debug, PartialEq, Clone)]
+pub enum LiteralValue {
+    String(String),
+    Symbol(String),
+    Integer(String),
+    Decimal(String),
+    Boolean(String),
+}
 
-#[derive(Debug, PartialEq)]
+pub type Literal = Positioned<LiteralValue>;
+
+#[derive(Debug, PartialEq, Clone)]
 pub struct IdentifierFields {
     pub identifier: Token,
     pub type_annotation: Option<(Token, Token)>,
@@ -39,9 +37,19 @@ pub struct IdentifierFields {
 
 pub type Identifier = Positioned<IdentifierFields>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
+pub struct App {
+    pub left_paren: PrefixSpacing,
+    pub func: Box<Expr>,
+    pub args: Vec<Expr>,
+    pub right_paren: PrefixSpacing,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Identifier(Identifier),
+    Literal(Literal),
+    Application(App),
 }
 
 #[derive(Debug, PartialEq)]
