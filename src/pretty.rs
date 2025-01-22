@@ -231,8 +231,9 @@ impl Pretty for Arguments {
         let r_paren = format_spacing(&self.right_paren).append(")");
 
         // Check if any argument has a newline
-        let multiline = self.args.iter().any(|arg| match arg {
-            (spacing, _) => has_newline(spacing),
+        let multiline = self.args.iter().any(|arg| {
+            let (spacing, _) = arg;
+            has_newline(spacing)
         });
 
         if multiline {
