@@ -71,10 +71,18 @@ pub struct App {
 }
 
 #[derive(Debug, PartialEq, Clone)]
+pub struct List {
+    pub left_bracket: PrefixSpacing,
+    pub members: Vec<Expr>,
+    pub right_bracket: PrefixSpacing,
+}
+
+#[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Identifier(Identifier),
     Literal(Literal),
     Application(App),
+    List(List),
 }
 
 #[derive(Debug, PartialEq)]
@@ -84,12 +92,19 @@ pub struct Arguments {
     pub right_paren: PrefixSpacing,
 }
 
+// FIXME: Missing doc/model annotations and bare docstrings. Will probably
+// represent each with their own field and typed where the annotation is
+// an Option<PrefixSpacing> for doc or a required PrefixSpacing for model,
+// and a string for content for a doc and a ...list expr for model(?)
 #[derive(Debug, PartialEq)]
 pub struct Defun {
     pub left_paren: PrefixSpacing,
     pub defun: PrefixSpacing,
     pub name: Identifier,
     pub arguments: Arguments,
+    // FIXME: Technically you can't have a list of expressions in the body,
+    // it's really just an optional doc annotation, optional model, and then
+    // body, which is a single expr.
     pub body: Vec<Expr>,
     pub right_paren: PrefixSpacing,
 }

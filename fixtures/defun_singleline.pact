@@ -1,1 +1,1 @@
-(defun square (x) (+ x x))
+(defun square (x) (+ [x] [x]))

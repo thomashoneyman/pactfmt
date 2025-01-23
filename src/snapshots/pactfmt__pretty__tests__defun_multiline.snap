@@ -9,4 +9,8 @@ expression: buffer
   (+
     x
     (write y 1.0))
-  "Write succeeded")
+  [ "Write"
+    (write y 1.0)
+    "definitely"
+    "succeeded"
+  ])

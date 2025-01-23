@@ -198,7 +198,20 @@ fn arguments(input: &mut Input) -> PResult<Arguments> {
     })
 }
 
-// In parser.rs
+fn list(input: &mut Input) -> PResult<List> {
+    let (left_bracket, _) =
+        positioned(any.verify(|t| *t == Token::LeftBracket)).parse_next(input)?;
+    let members: Vec<Expr> = repeat(0.., expr).parse_next(input)?;
+    let (right_bracket, _) =
+        positioned(any.verify(|t| *t == Token::RightBracket)).parse_next(input)?;
+
+    Ok(List {
+        left_bracket,
+        members,
+        right_bracket,
+    })
+}
+
 fn app(input: &mut Input) -> PResult<App> {
     let (left_paren, _) = positioned(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
     let func = Box::new(expr.parse_next(input)?);
@@ -218,6 +231,7 @@ fn expr(input: &mut Input) -> PResult<Expr> {
         literal.map(Expr::Literal),
         identifier.map(Expr::Identifier),
         app.map(Expr::Application),
+        list.map(Expr::List),
     ))
     .parse_next(input)
 }
@@ -328,6 +342,33 @@ mod tests {
         let result = arguments.parse_next(&mut input);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().args.len(), 3);
+    }
+
+    #[test]
+    fn test_empty_list() {
+        let tokens = lex("[]");
+        let mut input = tokens.as_slice();
+        let result = list.parse_next(&mut input);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().members.len(), 0);
+    }
+
+    #[test]
+    fn test_single_list() {
+        let tokens = lex("[arg]");
+        let mut input = tokens.as_slice();
+        let result = list.parse_next(&mut input);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().members.len(), 1);
+    }
+
+    #[test]
+    fn test_multiple_list() {
+        let tokens = lex("[1 [2] (x 3) 4]");
+        let mut input = tokens.as_slice();
+        let result = list.parse_next(&mut input);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().members.len(), 4);
     }
 
     #[test]

@@ -2,4 +2,4 @@
 source: src/pretty.rs
 expression: buffer
 ---
-(defun square (x) (+ x x))
+(defun square (x) (+ [ x ] [ x ]))

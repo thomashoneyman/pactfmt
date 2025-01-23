@@ -192,6 +192,10 @@ impl Pretty for App {
             | Expr::Application(App {
                 left_paren: spacing,
                 ..
+            })
+            | Expr::List(List {
+                left_bracket: spacing,
+                ..
             }) => has_newline(spacing),
         });
 
@@ -236,16 +240,86 @@ impl Pretty for App {
     }
 }
 
+impl Pretty for List {
+    fn pretty(&self) -> RcDoc<()> {
+        let l_bracket = format_spacing(&self.left_bracket).append("[");
+        let r_bracket = format_spacing(&self.right_bracket).append("]");
+
+        let multiline = self.members.iter().any(|arg| match arg {
+            Expr::Identifier((spacing, _))
+            | Expr::Literal((spacing, _))
+            | Expr::Application(App {
+                left_paren: spacing,
+                ..
+            })
+            | Expr::List(List {
+                left_bracket: spacing,
+                ..
+            }) => has_newline(spacing),
+        });
+
+        if multiline {
+            // Each member gets a newline before it, unless it already has one
+            fn members_doc(items: &[Expr]) -> RcDoc<'_> {
+                RcDoc::intersperse(
+                    items.iter().map(|item| match item {
+                        Expr::Identifier((spacing, _))
+                        | Expr::Literal((spacing, _))
+                        | Expr::Application(App {
+                            left_paren: spacing,
+                            ..
+                        })
+                        | Expr::List(List {
+                            left_bracket: spacing,
+                            ..
+                        }) if !has_newline(spacing) => RcDoc::hardline().append(item.pretty()),
+                        _ => item.pretty(),
+                    }),
+                    RcDoc::nil(),
+                )
+            }
+
+            match self.members.split_first() {
+                Some((first, rest)) => l_bracket
+                    .append(RcDoc::space())
+                    .append(first.pretty())
+                    .append(members_doc(rest))
+                    .append(RcDoc::hardline())
+                    .nest(2)
+                    .append(r_bracket),
+                None => l_bracket.append(r_bracket),
+            }
+        } else {
+            let members = match self.members.split_first() {
+                None => RcDoc::nil(),
+                Some((first, rest)) => {
+                    let mut doc = RcDoc::space().append(first.pretty()).append(RcDoc::space());
+                    for arg in rest {
+                        doc = doc.append(arg.pretty()).append(RcDoc::space());
+                    }
+                    doc
+                }
+            };
+
+            l_bracket.append(members).append(r_bracket)
+        }
+    }
+}
+
 impl Pretty for Expr {
     fn pretty(&self) -> RcDoc<()> {
         match self {
             Expr::Identifier(id) => id.pretty(),
             Expr::Literal(lit) => lit.pretty(),
             Expr::Application(app) => app.pretty(),
+            Expr::List(list) => list.pretty(),
         }
     }
 }
 
+// FIXME: Consider renaming to 'ParenList' as opposed to 'BracketList'
+// above (List), since they format essentially the same, and paren lists
+// are needed for do-blocks, let, etc.?
 impl Pretty for Arguments {
     fn pretty(&self) -> RcDoc<()> {
         let l_paren = format_spacing(&self.left_paren).append("(");
@@ -316,6 +390,10 @@ impl Pretty for Defun {
                 | Expr::Application(App {
                     left_paren: spacing,
                     ..
+                })
+                | Expr::List(List {
+                    left_bracket: spacing,
+                    ..
                 }) => has_newline(spacing),
             });
 
@@ -332,6 +410,10 @@ impl Pretty for Defun {
                             | Expr::Literal((spacing, _))
                             | Expr::Application(App {
                                 left_paren: spacing,
+                                ..
+                            })
+                            | Expr::List(List {
+                                left_bracket: spacing,
                                 ..
                             }) => !has_newline(spacing),
                         };
