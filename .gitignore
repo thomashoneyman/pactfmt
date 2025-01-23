@@ -14,4 +14,4 @@ target/
 
 # Etc
 /target
-.pact-history
+.pact*
