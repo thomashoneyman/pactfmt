@@ -365,6 +365,49 @@ impl Pretty for Arguments {
     }
 }
 
+impl Pretty for DocAnn {
+    fn pretty(&self) -> RcDoc<()> {
+        format_spacing(&self.ann)
+            .append("@doc")
+            .append(RcDoc::space())
+            .append(format_spacing(&self.docstr.0))
+            .append(RcDoc::text(&self.docstr.1))
+    }
+}
+
+impl Pretty for ModelAnn {
+    fn pretty(&self) -> RcDoc<()> {
+        format_spacing(&self.ann)
+            .append("@model")
+            .append(RcDoc::space())
+            .append(self.exprs.pretty())
+    }
+}
+
+impl Pretty for ManagedAnn {
+    fn pretty(&self) -> RcDoc<()> {
+        let ann = format_spacing(&self.ann).append("@managed");
+        match &self.args {
+            Some((a, b)) => ann
+                .append(RcDoc::space())
+                .append(a.pretty())
+                .append(RcDoc::space())
+                .append(b.pretty()),
+            None => ann,
+        }
+    }
+}
+
+impl Pretty for DefunBody {
+    fn pretty(&self) -> RcDoc<()> {
+        match self {
+            DefunBody::DocAnn(ann) => ann.pretty(),
+            DefunBody::ModelAnn(ann) => ann.pretty(),
+            DefunBody::Expr(expr) => expr.pretty(),
+        }
+    }
+}
+
 impl Pretty for Defun {
     fn pretty(&self) -> RcDoc<()> {
         let l_paren = format_spacing(&self.left_paren).append("(");
@@ -384,17 +427,28 @@ impl Pretty for Defun {
                 .args
                 .iter()
                 .any(|(spacing, _)| has_newline(spacing))
-            || self.body.iter().any(|expr| match expr {
-                Expr::Identifier((spacing, _))
-                | Expr::Literal((spacing, _))
-                | Expr::Application(App {
-                    left_paren: spacing,
-                    ..
-                })
-                | Expr::List(List {
-                    left_bracket: spacing,
-                    ..
-                }) => has_newline(spacing),
+            || self.body.iter().any(|body| match body {
+                DefunBody::DocAnn(DocAnn { ann, .. }) => has_newline(ann),
+                DefunBody::ModelAnn(ModelAnn {
+                    ann,
+                    exprs:
+                        List {
+                            left_bracket: spacing,
+                            ..
+                        },
+                }) => has_newline(ann) || has_newline(spacing),
+                DefunBody::Expr(expr) => match expr {
+                    Expr::Identifier((spacing, _))
+                    | Expr::Literal((spacing, _))
+                    | Expr::Application(App {
+                        left_paren: spacing,
+                        ..
+                    })
+                    | Expr::List(List {
+                        left_bracket: spacing,
+                        ..
+                    }) => has_newline(spacing),
+                },
             });
 
         if needs_multiline {
@@ -404,23 +458,34 @@ impl Pretty for Defun {
                     // First expression just use its spacing as-is
                     let mut doc = first.pretty();
                     // Rest of expressions ensure a newline before each
-                    for expr in rest {
-                        let needs_newline = match expr {
-                            Expr::Identifier((spacing, _))
-                            | Expr::Literal((spacing, _))
-                            | Expr::Application(App {
-                                left_paren: spacing,
-                                ..
-                            })
-                            | Expr::List(List {
-                                left_bracket: spacing,
-                                ..
-                            }) => !has_newline(spacing),
+                    for defun_body in rest {
+                        let needs_newline = match defun_body {
+                            DefunBody::DocAnn(DocAnn { ann, .. }) => !has_newline(ann),
+                            DefunBody::ModelAnn(ModelAnn {
+                                ann,
+                                exprs:
+                                    List {
+                                        left_bracket: spacing,
+                                        ..
+                                    },
+                            }) => !has_newline(ann) || !has_newline(spacing),
+                            DefunBody::Expr(expr) => match expr {
+                                Expr::Identifier((spacing, _))
+                                | Expr::Literal((spacing, _))
+                                | Expr::Application(App {
+                                    left_paren: spacing,
+                                    ..
+                                })
+                                | Expr::List(List {
+                                    left_bracket: spacing,
+                                    ..
+                                }) => !has_newline(spacing),
+                            },
                         };
                         if needs_newline {
                             doc = doc.append(RcDoc::hardline());
                         }
-                        doc = doc.append(expr.pretty());
+                        doc = doc.append(defun_body.pretty());
                     }
                     doc
                 }
@@ -455,10 +520,122 @@ impl Pretty for Defun {
     }
 }
 
+impl Pretty for DefcapBody {
+    fn pretty(&self) -> RcDoc<()> {
+        match self {
+            DefcapBody::DocAnn(ann) => ann.pretty(),
+            DefcapBody::ManagedAnn(ann) => ann.pretty(),
+            DefcapBody::EventAnn(spacing) => format_spacing(spacing).append("@event"),
+            DefcapBody::Expr(expr) => expr.pretty(),
+        }
+    }
+}
+
+impl Pretty for Defcap {
+    fn pretty(&self) -> RcDoc<()> {
+        let l_paren = format_spacing(&self.left_paren).append("(");
+        let defcap = format_spacing(&self.defcap)
+            .append("defcap")
+            .append(RcDoc::space());
+        let name = format_spacing(&self.name.0)
+            .append(self.name.1.pretty())
+            .append(RcDoc::space());
+        let r_paren = format_spacing(&self.right_paren).append(")");
+
+        let needs_multiline = has_newline(&self.defcap)
+            || has_newline(&self.name.0)
+            || has_newline(&self.right_paren)
+            || self
+                .arguments
+                .args
+                .iter()
+                .any(|(spacing, _)| has_newline(spacing))
+            || self.body.iter().any(|body| match body {
+                DefcapBody::DocAnn(DocAnn { ann, .. }) => has_newline(ann),
+                DefcapBody::EventAnn(spacing) => has_newline(spacing),
+                DefcapBody::ManagedAnn(ManagedAnn { ann, .. }) => has_newline(ann),
+                DefcapBody::Expr(expr) => match expr {
+                    Expr::Identifier((spacing, _))
+                    | Expr::Literal((spacing, _))
+                    | Expr::Application(App {
+                        left_paren: spacing,
+                        ..
+                    })
+                    | Expr::List(List {
+                        left_bracket: spacing,
+                        ..
+                    }) => has_newline(spacing),
+                },
+            });
+
+        if needs_multiline {
+            let body = match self.body.split_first() {
+                None => RcDoc::nil(),
+                Some((first, rest)) => {
+                    // First expression just use its spacing as-is
+                    let mut doc = first.pretty();
+                    // Rest of expressions ensure a newline before each
+                    for defcap_body in rest {
+                        let needs_newline = match defcap_body {
+                            DefcapBody::DocAnn(DocAnn { ann, .. }) => !has_newline(ann),
+                            DefcapBody::EventAnn(spacing) => !has_newline(spacing),
+                            DefcapBody::ManagedAnn(ManagedAnn { ann, .. }) => !has_newline(ann),
+                            DefcapBody::Expr(expr) => match expr {
+                                Expr::Identifier((spacing, _))
+                                | Expr::Literal((spacing, _))
+                                | Expr::Application(App {
+                                    left_paren: spacing,
+                                    ..
+                                })
+                                | Expr::List(List {
+                                    left_bracket: spacing,
+                                    ..
+                                }) => !has_newline(spacing),
+                            },
+                        };
+                        if needs_newline {
+                            doc = doc.append(RcDoc::hardline());
+                        }
+                        doc = doc.append(defcap_body.pretty());
+                    }
+                    doc
+                }
+            };
+
+            l_paren
+                .append(defcap)
+                .append(name)
+                .append(self.arguments.pretty())
+                .append(body.nest(2))
+                .append(r_paren)
+        } else {
+            // Single line format
+            let body = match self.body.split_first() {
+                None => RcDoc::nil(),
+                Some((first, rest)) => {
+                    let mut doc = RcDoc::space().append(first.pretty());
+                    for expr in rest {
+                        doc = doc.append(RcDoc::space()).append(expr.pretty());
+                    }
+                    doc
+                }
+            };
+
+            l_paren
+                .append(defcap)
+                .append(name)
+                .append(self.arguments.pretty())
+                .append(body)
+                .append(r_paren)
+        }
+    }
+}
+
 impl Pretty for Toplevel {
     fn pretty(&self) -> RcDoc<()> {
         match self {
             Toplevel::Defun(defun) => defun.pretty(),
+            Toplevel::Defcap(defcap) => defcap.pretty(),
             Toplevel::Expr(expr) => expr.pretty(),
         }
     }

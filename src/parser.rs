@@ -78,7 +78,7 @@ fn parse_reference(input: &mut Input) -> PResult<Reference> {
     })
 }
 
-fn parse_named(input: &mut Input) -> PResult<Named> {
+fn named(input: &mut Input) -> PResult<Named> {
     alt((
         // Try reference first since it's more specific
         parse_reference.map(Named::Reference),
@@ -98,7 +98,7 @@ fn type_annotation(input: &mut Input) -> PResult<Type> {
         (
             any.verify(|tok| *tok == Token::Module),
             any.verify(|tok| *tok == Token::LeftBrace),
-            separated(0.., parse_named, any.verify(|tok| *tok == Token::Comma)),
+            separated(0.., named, any.verify(|tok| *tok == Token::Comma)),
             any.verify(|tok| *tok == Token::RightBrace),
         )
             .map(|(_, _, refs, _)| Type::Module(refs)),
@@ -185,6 +185,33 @@ fn literal(input: &mut Input) -> PResult<Literal> {
     .parse_next(input)
 }
 
+fn doc_ann(input: &mut Input) -> PResult<DocAnn> {
+    let (ann, _) = positioned(any.verify(|t| *t == Token::DocAnn)).parse_next(input)?;
+    let docstr = positioned(any.verify_map(|tok| match tok {
+        Token::String(s) => Some(s),
+        _ => None,
+    }))
+    .parse_next(input)?;
+    Ok(DocAnn { ann, docstr })
+}
+
+fn model_ann(input: &mut Input) -> PResult<ModelAnn> {
+    let (ann, _) = positioned(any.verify(|t| *t == Token::ModelAnn)).parse_next(input)?;
+    let exprs = list(input)?;
+    Ok(ModelAnn { ann, exprs })
+}
+
+fn event_ann(input: &mut Input) -> PResult<PrefixSpacing> {
+    let (ann, _) = positioned(any.verify(|t| *t == Token::EventAnn)).parse_next(input)?;
+    Ok(ann)
+}
+
+fn managed_ann(input: &mut Input) -> PResult<ManagedAnn> {
+    let (ann, _) = positioned(any.verify(|t| *t == Token::ManagedAnn)).parse_next(input)?;
+    let args = opt((named, named)).parse_next(input)?;
+    Ok(ManagedAnn { ann, args })
+}
+
 /// Parse an arguments list
 fn arguments(input: &mut Input) -> PResult<Arguments> {
     let (left_paren, _) = positioned(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
@@ -236,13 +263,22 @@ fn expr(input: &mut Input) -> PResult<Expr> {
     .parse_next(input)
 }
 
-// Parse a wrapped function definition
+pub fn defun_body(input: &mut Input) -> PResult<DefunBody> {
+    alt((
+        doc_ann.map(DefunBody::DocAnn),
+        model_ann.map(DefunBody::ModelAnn),
+        expr.map(DefunBody::Expr),
+    ))
+    .parse_next(input)
+}
+
+/// Parse a function definition
 pub fn defun(input: &mut Input) -> PResult<Defun> {
     let (left_paren, _) = positioned(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
     let (defun, _) = positioned(any.verify(|t| *t == Token::Defun)).parse_next(input)?;
     let name = identifier.parse_next(input)?;
     let arguments = arguments.parse_next(input)?;
-    let body = repeat(1.., expr).parse_next(input)?;
+    let body = repeat(1.., defun_body).parse_next(input)?;
     let (right_paren, _) = positioned(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
 
     Ok(Defun {
@@ -255,8 +291,42 @@ pub fn defun(input: &mut Input) -> PResult<Defun> {
     })
 }
 
+pub fn defcap_body(input: &mut Input) -> PResult<DefcapBody> {
+    alt((
+        doc_ann.map(DefcapBody::DocAnn),
+        event_ann.map(DefcapBody::EventAnn),
+        managed_ann.map(DefcapBody::ManagedAnn),
+        expr.map(DefcapBody::Expr),
+    ))
+    .parse_next(input)
+}
+
+/// Parse a function definition
+pub fn defcap(input: &mut Input) -> PResult<Defcap> {
+    let (left_paren, _) = positioned(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
+    let (defcap, _) = positioned(any.verify(|t| *t == Token::DefCap)).parse_next(input)?;
+    let name = identifier.parse_next(input)?;
+    let arguments = arguments.parse_next(input)?;
+    let body = repeat(1.., defcap_body).parse_next(input)?;
+    let (right_paren, _) = positioned(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
+
+    Ok(Defcap {
+        left_paren,
+        defcap,
+        name,
+        arguments,
+        body,
+        right_paren,
+    })
+}
+
 fn top_level(input: &mut Input) -> PResult<Toplevel> {
-    alt((defun.map(Toplevel::Defun), expr.map(Toplevel::Expr))).parse_next(input)
+    alt((
+        defun.map(Toplevel::Defun),
+        defcap.map(Toplevel::Defcap),
+        expr.map(Toplevel::Expr),
+    ))
+    .parse_next(input)
 }
 
 #[cfg(test)]
@@ -541,16 +611,23 @@ mod tests {
 
     #[test]
     fn test_defun_with_mixed_expressions() {
-        let tokens = lex("(defun f (x) x 42 \"hello\" my-var)");
+        let tokens = lex("(defun f (x) @model [] x 42 \"hello\" my-var)");
         let mut input = tokens.as_slice();
         let result = defun.parse_next(&mut input);
         assert!(result.is_ok());
         let defun = result.unwrap();
-        assert_eq!(defun.body.len(), 4);
-        assert!(matches!(defun.body[0], Expr::Identifier(_)));
-        assert!(matches!(defun.body[1], Expr::Literal(_)));
-        assert!(matches!(defun.body[2], Expr::Literal(_)));
-        assert!(matches!(defun.body[3], Expr::Identifier(_)));
+        assert_eq!(defun.body.len(), 5);
+        assert!(matches!(defun.body[0], DefunBody::ModelAnn(_)));
+        assert!(matches!(
+            defun.body[1],
+            DefunBody::Expr(Expr::Identifier(_))
+        ));
+        assert!(matches!(defun.body[2], DefunBody::Expr(Expr::Literal(_))));
+        assert!(matches!(defun.body[3], DefunBody::Expr(Expr::Literal(_))));
+        assert!(matches!(
+            defun.body[4],
+            DefunBody::Expr(Expr::Identifier(_))
+        ));
     }
 
     #[test]

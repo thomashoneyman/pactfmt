@@ -1,0 +1,1 @@
+(defcap GOV:bool () true)

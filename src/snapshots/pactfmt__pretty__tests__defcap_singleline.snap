@@ -1,0 +1,5 @@
+---
+source: src/pretty.rs
+expression: buffer
+---
+(defcap GOV:bool () true)

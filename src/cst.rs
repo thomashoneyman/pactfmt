@@ -77,6 +77,30 @@ pub struct List {
     pub right_bracket: PrefixSpacing,
 }
 
+/// @doc "docstring"
+#[derive(Debug, PartialEq, Clone)]
+pub struct DocAnn {
+    pub ann: PrefixSpacing,
+    pub docstr: Positioned<String>,
+}
+
+/// @model [ ... ]
+#[derive(Debug, PartialEq, Clone)]
+pub struct ModelAnn {
+    pub ann: PrefixSpacing,
+    // Technically this can only be a restricted set of applications
+    // or identifiers, but for formatting purposes we don't validate.
+    pub exprs: List,
+}
+
+/// @managed or @managed amount amount-mgr, where the arguments must
+/// be on the same line as @managed
+#[derive(Debug, PartialEq, Clone)]
+pub struct ManagedAnn {
+    pub ann: PrefixSpacing,
+    pub args: Option<(Named, Named)>,
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Expr {
     Identifier(Identifier),
@@ -92,25 +116,44 @@ pub struct Arguments {
     pub right_paren: PrefixSpacing,
 }
 
-// FIXME: Missing doc/model annotations and bare docstrings. Will probably
-// represent each with their own field and typed where the annotation is
-// an Option<PrefixSpacing> for doc or a required PrefixSpacing for model,
-// and a string for content for a doc and a ...list expr for model(?)
+#[derive(Debug, PartialEq, Clone)]
+pub enum DefunBody {
+    DocAnn(DocAnn),
+    ModelAnn(ModelAnn),
+    Expr(Expr),
+}
+
 #[derive(Debug, PartialEq)]
 pub struct Defun {
     pub left_paren: PrefixSpacing,
     pub defun: PrefixSpacing,
     pub name: Identifier,
     pub arguments: Arguments,
-    // FIXME: Technically you can't have a list of expressions in the body,
-    // it's really just an optional doc annotation, optional model, and then
-    // body, which is a single expr.
-    pub body: Vec<Expr>,
+    pub body: Vec<DefunBody>,
+    pub right_paren: PrefixSpacing,
+}
+
+#[derive(Debug, PartialEq)]
+pub enum DefcapBody {
+    DocAnn(DocAnn),
+    EventAnn(PrefixSpacing),
+    ManagedAnn(ManagedAnn),
+    Expr(Expr),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Defcap {
+    pub left_paren: PrefixSpacing,
+    pub defcap: PrefixSpacing,
+    pub name: Identifier,
+    pub arguments: Arguments,
+    pub body: Vec<DefcapBody>,
     pub right_paren: PrefixSpacing,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Toplevel {
     Defun(Defun),
+    Defcap(Defcap),
     Expr(Expr),
 }
