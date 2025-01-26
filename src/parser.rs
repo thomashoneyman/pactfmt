@@ -241,13 +241,13 @@ fn list(input: &mut Input) -> PResult<List> {
 
 fn app(input: &mut Input) -> PResult<App> {
     let (left_paren, _) = positioned(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
-    let func = Box::new(expr.parse_next(input)?);
+    let func = positioned(named).parse_next(input)?;
     let args: Vec<Expr> = repeat(0.., expr).parse_next(input)?;
     let (right_paren, _) = positioned(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
 
     Ok(App {
         left_paren,
-        func,
+        func: Box::new(func),
         args,
         right_paren,
     })
@@ -637,8 +637,7 @@ mod tests {
         let result = expr.parse_next(&mut input);
         assert!(result.is_ok());
         match result.unwrap() {
-            Expr::Application(App { func, args, .. }) => {
-                assert!(matches!(*func, Expr::Identifier(_)));
+            Expr::Application(App { args, .. }) => {
                 assert_eq!(args.len(), 1);
                 assert!(matches!(args[0], Expr::Identifier(_)));
             }
@@ -653,8 +652,7 @@ mod tests {
         let result = expr.parse_next(&mut input);
         assert!(result.is_ok());
         match result.unwrap() {
-            Expr::Application(App { func, args, .. }) => {
-                assert!(matches!(*func, Expr::Identifier(_)));
+            Expr::Application(App { args, .. }) => {
                 assert_eq!(args.len(), 3);
                 for arg in args {
                     assert!(matches!(arg, Expr::Identifier(_)));
@@ -671,8 +669,7 @@ mod tests {
         let result = expr.parse_next(&mut input);
         assert!(result.is_ok());
         match result.unwrap() {
-            Expr::Application(App { func, args, .. }) => {
-                assert!(matches!(*func, Expr::Identifier(_)));
+            Expr::Application(App { args, .. }) => {
                 assert_eq!(args.len(), 2);
                 assert!(matches!(args[0], Expr::Application { .. }));
                 assert!(matches!(args[1], Expr::Identifier(_)));

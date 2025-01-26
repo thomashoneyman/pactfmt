@@ -1,1 +1,1 @@
-(defun square (x) (+ [x] [x]))
+(defun print (x) @doc "wot" x)

@@ -65,7 +65,7 @@ pub type Identifier = Positioned<IdentifierFields>;
 #[derive(Debug, PartialEq, Clone)]
 pub struct App {
     pub left_paren: PrefixSpacing,
-    pub func: Box<Expr>,
+    pub func: Box<Positioned<Named>>,
     pub args: Vec<Expr>,
     pub right_paren: PrefixSpacing,
 }

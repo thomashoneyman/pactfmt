@@ -2,15 +2,19 @@
 source: src/pretty.rs
 expression: buffer
 ---
-(defun f ; wot
-  ( x:object{schema}
-    y:[integer]
+(defun print:[string] 
+  ; wot
+  (
+    x:integer
+    y
   )
-  (+
-    x
-    (write y 1.0))
-  [ "Write"
-    (write y 1.0)
-    "definitely"
-    "succeeded"
-  ])
+  
+  "doc comment"
+  [
+    (to-string x)
+    
+    "got"
+    "it"
+  ]
+
+)

@@ -2,10 +2,15 @@
 source: src/pretty.rs
 expression: buffer
 ---
-(defcap TRANSFER:bool 
-  ( sender:string
+(defun TRANSFER:bool 
+  
+  (
+    
+    sender:string
     receiver:string
     amount:decimal
   )
+  
   @managed amount TRANSFER-mgr
+
 )
