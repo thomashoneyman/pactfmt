@@ -194,5 +194,5 @@ pub enum Toplevel {
     Defcap(Defcap),
     Defconst(Defconst),
     Expr(Expr),
-    Module(Module),
+    Module(Box<Module>),
 }

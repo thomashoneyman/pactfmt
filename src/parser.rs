@@ -377,7 +377,7 @@ fn top_level(input: &mut Input) -> PResult<Toplevel> {
         defcap.map(Toplevel::Defcap),
         defconst.map(Toplevel::Defconst),
         expr.map(Toplevel::Expr),
-        module.map(Toplevel::Module),
+        module.map(|val| Toplevel::Module(Box::new(val))),
     ))
     .parse_next(input)
 }

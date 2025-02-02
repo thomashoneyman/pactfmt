@@ -4,14 +4,10 @@ use crate::cst::*;
 use crate::lexer::Token;
 
 /// A utility to determine whether spacing contains a comment
-fn has_comment(spacing: &Vec<Spacing>) -> bool {
+fn has_comment(spacing: &[Spacing]) -> bool {
     spacing
         .iter()
-        .find(|space| match space {
-            Spacing::Comment(_) => true,
-            _ => false,
-        })
-        .is_some()
+        .any(|space| matches!(space, Spacing::Comment(_)))
 }
 
 pub struct FormatContext {
@@ -58,7 +54,7 @@ impl Pretty for Vec<Spacing> {
             _ => 0,
         };
 
-        let (newlines, comment, doc) = self.into_iter().fold(
+        let (newlines, comment, doc) = self.iter().fold(
             (init_newlines, false, RcDoc::nil()),
             |(newlines, comment, doc), tok| match tok {
                 Spacing::Comment(text) => {
