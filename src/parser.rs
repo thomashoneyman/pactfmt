@@ -40,7 +40,7 @@ where
     (whitespace_or_comment, parser)
 }
 
-fn parse_reference(input: &mut Input) -> PResult<Reference> {
+fn reference(input: &mut Input) -> PResult<Reference> {
     let first = any
         .verify_map(|tok| match tok {
             Token::Ident(s) => Some(s),
@@ -81,10 +81,16 @@ fn parse_reference(input: &mut Input) -> PResult<Reference> {
 fn named(input: &mut Input) -> PResult<Named> {
     alt((
         // Try reference first since it's more specific
-        parse_reference.map(Named::Reference),
+        reference.map(Named::Reference),
         // Fall back to simple identifier
         any.verify_map(|tok| match tok {
             Token::Ident(s) => Some(Named::Ident(s)),
+            // Not actually identifiers, but we can treat them as such
+            // for formatter convenience.
+            Token::Enforce => Some(Named::Ident("enforce".into())),
+            Token::EnforceOne => Some(Named::Ident("enforce-one".into())),
+            Token::EnforceGuard => Some(Named::Ident("enforce-guard".into())),
+            Token::KeysetRefGuard => Some(Named::Ident("keyset-ref-guard".into())),
             _ => None,
         }),
     ))
@@ -143,23 +149,15 @@ fn type_annotation(input: &mut Input) -> PResult<Type> {
 pub fn identifier(input: &mut Input) -> PResult<Identifier> {
     let ident_with_type = alt((
         // Just an identifier with no type
-        (
-            any.verify_map(|tok| match tok {
-                Token::Ident(s) => Some(s),
-                _ => None,
-            }),
-            peek(not(any.verify(|tok| *tok == Token::Colon))),
-        )
-            .map(|(id, _)| IdentifierFields {
+        (named, peek(not(any.verify(|tok| *tok == Token::Colon)))).map(|(id, _)| {
+            IdentifierFields {
                 identifier: id,
                 type_annotation: None,
-            }),
+            }
+        }),
         // Identifier with required type annotation
         (
-            any.verify_map(|tok| match tok {
-                Token::Ident(s) => Some(s),
-                _ => None,
-            }),
+            named,
             any.verify(|tok| *tok == Token::Colon),
             type_annotation,
         )
@@ -320,11 +318,39 @@ pub fn defcap(input: &mut Input) -> PResult<Defcap> {
     })
 }
 
+fn governance(input: &mut Input) -> PResult<ModuleGovernance> {
+    any.verify_map(|tok| match tok {
+        Token::Ident(s) => Some(ModuleGovernance::Cap(s)),
+        Token::String(s) => Some(ModuleGovernance::Keyset(s)),
+        Token::Symbol(s) => Some(ModuleGovernance::Keyset(s)),
+        _ => None,
+    })
+    .parse_next(input)
+}
+
+fn module(input: &mut Input) -> PResult<Module> {
+    let (left_paren, _) = positioned(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
+    let (module, _) = positioned(any.verify(|t| *t == Token::Module)).parse_next(input)?;
+    let name = positioned(named).parse_next(input)?;
+    let governance = positioned(governance).parse_next(input)?;
+    let body = repeat(1.., top_level).parse_next(input)?;
+    let (right_paren, _) = positioned(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
+    Ok(Module {
+        left_paren,
+        module,
+        name,
+        governance,
+        body,
+        right_paren,
+    })
+}
+
 fn top_level(input: &mut Input) -> PResult<Toplevel> {
     alt((
         defun.map(Toplevel::Defun),
         defcap.map(Toplevel::Defcap),
         expr.map(Toplevel::Expr),
+        module.map(Toplevel::Module),
     ))
     .parse_next(input)
 }
@@ -365,7 +391,7 @@ mod tests {
             leading,
             vec![Spacing::Comment("; hello".into()), Spacing::NewlineOne,]
         );
-        assert!(matches!(fields.identifier, s if s == "foo"));
+        assert!(matches!(fields.identifier, s if s == Named::Ident("foo".into())));
         assert_eq!(fields.type_annotation, None);
     }
 
@@ -676,5 +702,19 @@ mod tests {
             }
             _ => panic!("Expected application"),
         }
+    }
+
+    #[test]
+    fn test_module_basic() {
+        let tokens = lex("
+        ; This is a Pact module
+        (module basic GOV
+            (defcap GOV () true)
+            (defun add:integer (x:integer y:integer) (+ x y))
+        )
+    ");
+        let mut input = tokens.as_slice();
+        let result = module.parse_next(&mut input);
+        assert!(result.is_ok(), "{:?}", result);
     }
 }

@@ -114,6 +114,12 @@ pub enum Token {
     #[token("enforce-one")]
     EnforceOne,
 
+    #[token("enforce-guard")]
+    EnforceGuard,
+
+    #[token("keyset-ref-guard")]
+    KeysetRefGuard,
+
     #[token("step")]
     Step,
 
@@ -256,6 +262,8 @@ mod tests {
       lex_step_with_rollback: "step-with-rollback" => Token::StepWithRollback,
       lex_enforce: "enforce" => Token::Enforce,
       lex_enforce_one: "enforce-one" => Token::EnforceOne,
+      lex_enforce_guard: "enforce-guard" => Token::EnforceGuard,
+      lex_keyset_ref_guard: "keyset-ref-guard" => Token::KeysetRefGuard,
       lex_step: "step" => Token::Step,
       lex_with_capability: "with-capability" => Token::WithCapability,
       lex_create_user_guard: "create-user-guard" => Token::CreateUserGuard,

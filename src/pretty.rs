@@ -138,6 +138,8 @@ impl Pretty for Token {
             Token::StepWithRollback => RcDoc::text("step-with-rollback"),
             Token::Enforce => RcDoc::text("enforce"),
             Token::EnforceOne => RcDoc::text("enforce-one"),
+            Token::EnforceGuard => RcDoc::text("enforce-guard"),
+            Token::KeysetRefGuard => RcDoc::text("keyset-ref-guard"),
             Token::WithCapability => RcDoc::text("with-capability"),
             Token::CreateUserGuard => RcDoc::text("create-user-guard"),
             Token::Try => RcDoc::text("try"),
@@ -248,8 +250,8 @@ impl Pretty for Type {
 impl Pretty for IdentifierFields {
     fn pretty(&self, ctx: &FormatContext) -> RcDoc<()> {
         match self.type_annotation {
-            None => RcDoc::text(&self.identifier),
-            Some(ref ty) => RcDoc::text(&self.identifier)
+            None => self.identifier.pretty(ctx),
+            Some(ref ty) => (self.identifier.pretty(ctx))
                 .append(RcDoc::text(":"))
                 .append(ty.pretty(ctx)),
         }
@@ -476,7 +478,7 @@ impl Pretty for DocAnn {
             .pretty(ctx)
             .append("@doc")
             .append(RcDoc::space())
-            .append(self.docstr.0.pretty(ctx))
+            // FIXME: Include? .append(self.docstr.0.pretty(ctx))
             .append(RcDoc::text(&self.docstr.1))
     }
 }
@@ -565,62 +567,66 @@ impl HasSpacing for DefunBody {
 
 impl Pretty for Defun {
     fn pretty(&self, ctx: &FormatContext) -> RcDoc<()> {
+        let m_ctx = FormatContext { multiline: true };
+        let s_ctx = FormatContext { multiline: false };
+
         let defun_multiline = has_comment(&self.defun);
         let name_multiline = has_comment(&self.name.0);
-
-        let l_paren = self.left_paren.pretty(ctx).append("(");
-        let r_paren = self.right_paren.pretty(&ctx).append(")");
-
-        let multiline = defun_multiline
-            || name_multiline
-            || !self.right_paren.is_empty()
-            || self.arguments.leading_spacing()
-            || self.arguments.inner_spacing()
+        let args_multiline =
+            name_multiline || self.arguments.leading_spacing() || self.arguments.inner_spacing();
+        let body_multiline = args_multiline
             || self
                 .body
                 .iter()
                 .any(|body| body.leading_spacing() || body.inner_spacing());
 
-        if multiline {
-            let inner_ctx = FormatContext { multiline: true };
-            let body = RcDoc::concat(self.body.iter().map(|body| body.pretty(&inner_ctx)));
-            let defun = if defun_multiline {
-                self.defun.pretty(&inner_ctx).append("defun")
-            } else {
-                RcDoc::text("defun").append(RcDoc::space())
-            };
-            let name = if name_multiline {
-                self.name.pretty(&inner_ctx)
-            } else {
-                self.name.1.pretty(&inner_ctx).append(RcDoc::space())
-            };
-            l_paren
-                .append(defun)
-                .append(name)
-                .append(self.arguments.pretty(&inner_ctx).nest(2))
-                .append(body.nest(2))
-                .append(r_paren)
+        let l_paren = self.left_paren.pretty(ctx).append("(");
+
+        let defun = if defun_multiline {
+            self.defun.pretty(&m_ctx).append("defun")
         } else {
-            let body = match self.body.split_first() {
+            RcDoc::text("defun").append(RcDoc::space())
+        };
+
+        let name = if name_multiline {
+            self.name.pretty(&m_ctx).nest(2)
+        } else {
+            self.name.1.pretty(ctx).append(RcDoc::space())
+        };
+
+        let args = if args_multiline {
+            self.arguments.pretty(&m_ctx).nest(2)
+        } else {
+            self.arguments.pretty(&s_ctx).append(RcDoc::space())
+        };
+
+        let body = if body_multiline {
+            RcDoc::concat(self.body.iter().map(|body| body.pretty(&m_ctx))).nest(2)
+        } else {
+            match self.body.split_first() {
                 None => RcDoc::nil(),
                 Some((first, rest)) => {
-                    let mut doc = RcDoc::space().append(first.pretty(&ctx));
+                    let mut doc = first.pretty(&s_ctx);
                     for expr in rest {
-                        doc = doc.append(RcDoc::space()).append(expr.pretty(&ctx));
+                        doc = doc.append(RcDoc::space()).append(expr.pretty(&s_ctx));
                     }
                     doc
                 }
-            };
+            }
+        };
 
-            l_paren
-                .append("defun")
-                .append(RcDoc::space())
-                .append(self.name.pretty(&ctx))
-                .append(RcDoc::space())
-                .append(self.arguments.pretty(&ctx))
-                .append(body)
-                .append(r_paren)
-        }
+        let r_paren = if body_multiline {
+            self.right_paren.pretty(&m_ctx).append(")")
+        } else {
+            self.right_paren.pretty(&s_ctx).append(")")
+        };
+
+        l_paren
+            .append(defun)
+            .append(name)
+            .append(args)
+            .append(body)
+            .append(r_paren)
     }
 }
 
@@ -657,62 +663,122 @@ impl HasSpacing for DefcapBody {
 
 impl Pretty for Defcap {
     fn pretty(&self, ctx: &FormatContext) -> RcDoc<()> {
+        let m_ctx = FormatContext { multiline: true };
+        let s_ctx = FormatContext { multiline: false };
+
         let defcap_multiline = has_comment(&self.defcap);
         let name_multiline = has_comment(&self.name.0);
-
-        let l_paren = self.left_paren.pretty(ctx).append("(");
-        let r_paren = self.right_paren.pretty(&ctx).append(")");
-
-        let multiline = defcap_multiline
-            || name_multiline
-            || !self.right_paren.is_empty()
-            || self.arguments.leading_spacing()
-            || self.arguments.inner_spacing()
+        let args_multiline =
+            name_multiline || self.arguments.leading_spacing() || self.arguments.inner_spacing();
+        let body_multiline = args_multiline
             || self
                 .body
                 .iter()
                 .any(|body| body.leading_spacing() || body.inner_spacing());
 
-        if multiline {
-            let inner_ctx = FormatContext { multiline: true };
-            let body = RcDoc::concat(self.body.iter().map(|body| body.pretty(&inner_ctx)));
-            let defcap = if defcap_multiline {
-                self.defcap.pretty(&inner_ctx).append("defcap")
-            } else {
-                RcDoc::text("defun").append(RcDoc::space())
-            };
-            let name = if name_multiline {
-                self.name.pretty(&inner_ctx)
-            } else {
-                self.name.1.pretty(&inner_ctx).append(RcDoc::space())
-            };
-            l_paren
-                .append(defcap)
-                .append(name)
-                .append(self.arguments.pretty(&inner_ctx).nest(2))
-                .append(body.nest(2))
-                .append(r_paren)
+        let l_paren = self.left_paren.pretty(ctx).append("(");
+
+        let defcap = if defcap_multiline {
+            self.defcap.pretty(&m_ctx).append("defcap")
         } else {
-            let body = match self.body.split_first() {
+            RcDoc::text("defcap").append(RcDoc::space())
+        };
+
+        let name = if name_multiline {
+            self.name.pretty(&m_ctx).nest(2)
+        } else {
+            self.name.1.pretty(ctx).append(RcDoc::space())
+        };
+
+        let args = if args_multiline {
+            self.arguments.pretty(&m_ctx).nest(2)
+        } else {
+            self.arguments.pretty(&s_ctx).append(RcDoc::space())
+        };
+
+        let body = if body_multiline {
+            RcDoc::concat(self.body.iter().map(|body| body.pretty(&m_ctx))).nest(2)
+        } else {
+            match self.body.split_first() {
                 None => RcDoc::nil(),
                 Some((first, rest)) => {
-                    let mut doc = RcDoc::space().append(first.pretty(&ctx));
+                    let mut doc = first.pretty(&s_ctx);
                     for expr in rest {
-                        doc = doc.append(RcDoc::space()).append(expr.pretty(&ctx));
+                        doc = doc.append(RcDoc::space()).append(expr.pretty(&s_ctx));
                     }
                     doc
                 }
-            };
+            }
+        };
 
-            l_paren
-                .append("defcap")
-                .append(RcDoc::space())
-                .append(self.name.pretty(&ctx))
-                .append(RcDoc::space())
-                .append(self.arguments.pretty(&ctx))
-                .append(body)
-                .append(r_paren)
+        let r_paren = if body_multiline {
+            self.right_paren.pretty(&m_ctx).append(")")
+        } else {
+            self.right_paren.pretty(&s_ctx).append(")")
+        };
+
+        l_paren
+            .append(defcap)
+            .append(name)
+            .append(args)
+            .append(body)
+            .append(r_paren)
+    }
+}
+
+impl Pretty for ModuleGovernance {
+    fn pretty(&self, _: &FormatContext) -> RcDoc<()> {
+        match self {
+            ModuleGovernance::Keyset(str) => RcDoc::text(str),
+            ModuleGovernance::Cap(str) => RcDoc::text(str),
         }
+    }
+}
+
+impl Pretty for Module {
+    fn pretty(&self, _: &FormatContext) -> RcDoc<()> {
+        let ctx = FormatContext { multiline: true };
+
+        let l_paren = self.left_paren.pretty(&ctx).append("(");
+
+        let module_multiline = has_comment(&self.module);
+        let name_multiline = has_comment(&self.name.0);
+        let gov_multiline = has_comment(&self.governance.0);
+
+        let module = if module_multiline && !name_multiline {
+            self.module
+                .pretty(&ctx)
+                .append("module")
+                .append(RcDoc::space())
+        } else if module_multiline {
+            self.module.pretty(&ctx).append("module")
+        } else {
+            RcDoc::text("module").append(RcDoc::space())
+        };
+
+        let name = if name_multiline && !gov_multiline {
+            self.name.pretty(&ctx).append(RcDoc::space())
+        } else if name_multiline {
+            self.name.pretty(&ctx)
+        } else {
+            self.name.1.pretty(&ctx).append(RcDoc::space())
+        };
+
+        let gov = if gov_multiline {
+            self.governance.pretty(&ctx)
+        } else {
+            self.governance.1.pretty(&ctx).append(RcDoc::space())
+        };
+
+        let body = RcDoc::concat(self.body.iter().map(|body| body.pretty(&ctx)));
+        let r_paren = self.right_paren.pretty(&ctx).append(")");
+
+        l_paren
+            .append(module.nest(2))
+            .append(name.nest(2))
+            .append(gov.nest(2))
+            .append(body.nest(2))
+            .append(r_paren)
     }
 }
 
@@ -722,6 +788,7 @@ impl Pretty for Toplevel {
             Toplevel::Defun(defun) => defun.pretty(ctx),
             Toplevel::Defcap(defcap) => defcap.pretty(ctx),
             Toplevel::Expr(expr) => expr.pretty(ctx),
+            Toplevel::Module(module) => module.pretty(ctx),
         }
     }
 }

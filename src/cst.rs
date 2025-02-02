@@ -34,6 +34,7 @@ pub struct Reference {
     pub rest: Vec<String>,
 }
 
+/// An untyped identifier
 #[derive(Debug, Clone, PartialEq)]
 pub enum Named {
     Ident(String),
@@ -56,7 +57,10 @@ pub enum Type {
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct IdentifierFields {
-    pub identifier: String,
+    pub identifier: Named,
+    // Technically, many fields we're treating as 'identifiers' cannot
+    // have a type annotation, but it doesn't cause any harm from the
+    // perspective of the formatter.
     pub type_annotation: Option<Type>,
 }
 
@@ -152,8 +156,27 @@ pub struct Defcap {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum ModuleGovernance {
+    Keyset(String),
+    Cap(String),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Module {
+    pub left_paren: PrefixSpacing,
+    pub module: PrefixSpacing,
+    pub name: Positioned<Named>,
+    pub governance: Positioned<ModuleGovernance>,
+    // A module technically has a significantly more restricted set
+    // of allowed members, but toplevel largely captures the same.
+    pub body: Vec<Toplevel>,
+    pub right_paren: PrefixSpacing,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum Toplevel {
     Defun(Defun),
     Defcap(Defcap),
     Expr(Expr),
+    Module(Module),
 }
