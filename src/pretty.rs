@@ -726,6 +726,86 @@ impl Pretty for Defcap {
     }
 }
 
+impl Pretty for DefconstBody {
+    fn pretty(&self, ctx: &FormatContext) -> RcDoc<()> {
+        match self {
+            DefconstBody::DocAnn(ann) => ann.pretty(ctx),
+            DefconstBody::Expr(expr) => expr.pretty(ctx),
+        }
+    }
+}
+
+impl HasSpacing for DefconstBody {
+    fn leading_spacing(&self) -> bool {
+        match self {
+            DefconstBody::DocAnn(ann) => ann.leading_spacing(),
+            DefconstBody::Expr(expr) => expr.leading_spacing(),
+        }
+    }
+
+    fn inner_spacing(&self) -> bool {
+        match self {
+            DefconstBody::DocAnn(ann) => ann.inner_spacing(),
+            DefconstBody::Expr(expr) => expr.inner_spacing(),
+        }
+    }
+}
+
+impl Pretty for Defconst {
+    fn pretty(&self, ctx: &FormatContext) -> RcDoc<()> {
+        let m_ctx = FormatContext { multiline: true };
+        let s_ctx = FormatContext { multiline: false };
+
+        let defconst_multiline = has_comment(&self.defconst);
+        let name_multiline = has_comment(&self.name.0);
+        let body_multiline = self
+            .body
+            .iter()
+            .any(|body| body.leading_spacing() || body.inner_spacing());
+
+        let l_paren = self.left_paren.pretty(ctx).append("(");
+
+        let defconst = if defconst_multiline {
+            self.defconst.pretty(&m_ctx).append("defconst")
+        } else {
+            RcDoc::text("defconst").append(RcDoc::space())
+        };
+
+        let name = if name_multiline {
+            self.name.pretty(&m_ctx).nest(2)
+        } else {
+            self.name.1.pretty(ctx).append(RcDoc::space())
+        };
+
+        let body = if body_multiline {
+            RcDoc::concat(self.body.iter().map(|body| body.pretty(&m_ctx))).nest(2)
+        } else {
+            match self.body.split_first() {
+                None => RcDoc::nil(),
+                Some((first, rest)) => {
+                    let mut doc = first.pretty(&s_ctx);
+                    for expr in rest {
+                        doc = doc.append(RcDoc::space()).append(expr.pretty(&s_ctx));
+                    }
+                    doc
+                }
+            }
+        };
+
+        let r_paren = if body_multiline {
+            self.right_paren.pretty(&m_ctx).append(")")
+        } else {
+            self.right_paren.pretty(&s_ctx).append(")")
+        };
+
+        l_paren
+            .append(defconst)
+            .append(name)
+            .append(body)
+            .append(r_paren)
+    }
+}
+
 impl Pretty for ModuleGovernance {
     fn pretty(&self, _: &FormatContext) -> RcDoc<()> {
         match self {
@@ -787,6 +867,7 @@ impl Pretty for Toplevel {
         match self {
             Toplevel::Defun(defun) => defun.pretty(ctx),
             Toplevel::Defcap(defcap) => defcap.pretty(ctx),
+            Toplevel::Defconst(defconst) => defconst.pretty(ctx),
             Toplevel::Expr(expr) => expr.pretty(ctx),
             Toplevel::Module(module) => module.pretty(ctx),
         }

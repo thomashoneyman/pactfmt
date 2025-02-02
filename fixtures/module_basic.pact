@@ -5,7 +5,16 @@
 
   (defcap GOV () true)
 
-  (defun add:integer (x:integer y:integer)
+  (defconst ADMIN:string
+    @doc "name of the admin"
+    "admin"
+  )
+
+  (defun add:integer       (
+    ; the first number
+    x:integer
+    ; the second number
+    y:integer)
     @doc "adds integers"
       (+ x y))
 )

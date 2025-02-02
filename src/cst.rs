@@ -156,6 +156,21 @@ pub struct Defcap {
 }
 
 #[derive(Debug, PartialEq)]
+pub enum DefconstBody {
+    DocAnn(DocAnn),
+    Expr(Expr),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Defconst {
+    pub left_paren: PrefixSpacing,
+    pub defconst: PrefixSpacing,
+    pub name: Identifier,
+    pub body: Vec<DefconstBody>,
+    pub right_paren: PrefixSpacing,
+}
+
+#[derive(Debug, PartialEq)]
 pub enum ModuleGovernance {
     Keyset(String),
     Cap(String),
@@ -177,6 +192,7 @@ pub struct Module {
 pub enum Toplevel {
     Defun(Defun),
     Defcap(Defcap),
+    Defconst(Defconst),
     Expr(Expr),
     Module(Module),
 }

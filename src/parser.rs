@@ -91,6 +91,8 @@ fn named(input: &mut Input) -> PResult<Named> {
             Token::EnforceOne => Some(Named::Ident("enforce-one".into())),
             Token::EnforceGuard => Some(Named::Ident("enforce-guard".into())),
             Token::KeysetRefGuard => Some(Named::Ident("keyset-ref-guard".into())),
+            Token::Use => Some(Named::Ident("use".into())),
+            Token::Implements => Some(Named::Ident("implements".into())),
             _ => None,
         }),
     ))
@@ -318,6 +320,30 @@ pub fn defcap(input: &mut Input) -> PResult<Defcap> {
     })
 }
 
+pub fn defconst_body(input: &mut Input) -> PResult<DefconstBody> {
+    alt((
+        doc_ann.map(DefconstBody::DocAnn),
+        expr.map(DefconstBody::Expr),
+    ))
+    .parse_next(input)
+}
+
+pub fn defconst(input: &mut Input) -> PResult<Defconst> {
+    let (left_paren, _) = positioned(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
+    let (defconst, _) = positioned(any.verify(|t| *t == Token::DefConst)).parse_next(input)?;
+    let name = identifier.parse_next(input)?;
+    let body = repeat(1.., defconst_body).parse_next(input)?;
+    let (right_paren, _) = positioned(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
+
+    Ok(Defconst {
+        left_paren,
+        defconst,
+        name,
+        body,
+        right_paren,
+    })
+}
+
 fn governance(input: &mut Input) -> PResult<ModuleGovernance> {
     any.verify_map(|tok| match tok {
         Token::Ident(s) => Some(ModuleGovernance::Cap(s)),
@@ -349,6 +375,7 @@ fn top_level(input: &mut Input) -> PResult<Toplevel> {
     alt((
         defun.map(Toplevel::Defun),
         defcap.map(Toplevel::Defcap),
+        defconst.map(Toplevel::Defconst),
         expr.map(Toplevel::Expr),
         module.map(Toplevel::Module),
     ))
