@@ -7,8 +7,7 @@
 
   (defconst ADMIN:string
     @doc "name of the admin"
-    "admin"
-  )
+    "admin" )
 
   (defun add:integer       (
     ; the first number
