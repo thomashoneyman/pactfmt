@@ -1,12 +1,13 @@
 mod cst;
+mod format;
 mod lexer;
 mod parser;
-mod pretty;
 
 use clap::{Parser, Subcommand};
 use lexer::Token;
 use logos::Logos;
 use parser::parse;
+use pretty::RcAllocator;
 use std::io::{self, Read};
 
 #[derive(Debug, Parser)]
@@ -56,11 +57,22 @@ fn main() -> io::Result<()> {
                     buffer
                 }
             };
-            let lexed: Vec<_> = Token::lexer(&content)
-                .filter_map(|token| token.ok())
-                .collect();
-            println!("Parsed!\n{:?}", parse(&mut lexed.as_slice()));
-            println!("Formatted!\n{}", content);
+
+            let lexed = Token::lexer(&content);
+            let lexed_ok: Vec<_> = lexed.filter_map(|token| token.ok()).collect();
+            let parsed = parse(&mut lexed_ok.as_slice()).expect("failed to parse");
+            let lowered = parsed
+                .into_iter()
+                .map(cst::lower_toplevel)
+                .collect::<Vec<_>>();
+            let format_doc = lowered
+                .iter()
+                .fold(format::FormatDoc::nil(&RcAllocator), |acc, fst| {
+                    acc.append(fst.format(&RcAllocator))
+                });
+            let formatted = format_doc.pretty(80);
+
+            println!("Formatted!\n{}", formatted);
             Ok(())
         }
         _ => {

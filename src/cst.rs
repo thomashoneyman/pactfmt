@@ -1,9 +1,4 @@
-#[derive(Debug, PartialEq, Clone)]
-pub enum Spacing {
-    NewlineOne,
-    NewlineMany,
-    Comment(String),
-}
+use crate::format::{SourceToken, Spacing, SpecialForm, Wrapped, FST};
 
 /// Spacing that comes before any given token.
 /// For arbitrary tokens, this is best paired like (PrefixSpacing, Token)
@@ -113,4 +108,147 @@ pub struct Defun {
 pub enum Toplevel {
     Defun(Defun),
     Expr(Expr),
+}
+
+pub fn lower_toplevel(toplevel: Toplevel) -> FST {
+    match toplevel {
+        Toplevel::Expr(expr) => lower_expr(expr),
+        Toplevel::Defun(defun) => lower_defun(defun),
+    }
+}
+
+fn lower_expr(expr: Expr) -> FST {
+    match expr {
+        Expr::Literal((spacing, lit_value)) => {
+            let value = match lit_value {
+                LiteralValue::String(s) => s,
+                LiteralValue::Symbol(s) => s,
+                LiteralValue::Integer(s) => s,
+                LiteralValue::Decimal(s) => s,
+                LiteralValue::Boolean(s) => s,
+            };
+
+            FST::Literal(SourceToken {
+                leading: spacing,
+                value,
+                trailing: vec![],
+            })
+        }
+
+        Expr::Identifier((spacing, fields)) => {
+            let value = if let Some(type_ann) = fields.type_annotation {
+                format!("{}:{}", fields.identifier, format_type(type_ann))
+            } else {
+                fields.identifier
+            };
+
+            FST::Literal(SourceToken {
+                leading: spacing,
+                value,
+                trailing: vec![],
+            })
+        }
+
+        Expr::List(list) => FST::List(Wrapped {
+            open: SourceToken {
+                leading: list.left_bracket,
+                value: "[".to_string(),
+                trailing: vec![],
+            },
+            inner: list.members.into_iter().map(lower_expr).collect(),
+            close: SourceToken {
+                leading: list.right_bracket,
+                value: "]".to_string(),
+                trailing: vec![],
+            },
+        }),
+
+        Expr::Application(app) => FST::SExp(Wrapped {
+            open: SourceToken {
+                leading: app.left_paren,
+                value: "(".to_string(),
+                trailing: vec![],
+            },
+            inner: std::iter::once(*app.func)
+                .chain(app.args)
+                .map(lower_expr)
+                .collect(),
+            close: SourceToken {
+                leading: app.right_paren,
+                value: ")".to_string(),
+                trailing: vec![],
+            },
+        }),
+    }
+}
+
+fn format_type(type_ann: Type) -> String {
+    match type_ann {
+        Type::Ident(s) => s,
+        Type::List(inner) => format!("[{}]", format_type(*inner)),
+        Type::Object(schema) => match schema {
+            Some(s) => format!("object{{{}}}", s),
+            None => "object{}".to_string(),
+        },
+        Type::Schema(s) => format!("{{{}}}", s),
+        Type::Module(names) => {
+            let names = names
+                .into_iter()
+                .map(|n| match n {
+                    Named::Ident(s) => s,
+                    Named::Reference(r) => {
+                        let mut parts = vec![r.first, r.second];
+                        parts.extend(r.rest);
+                        parts.join(".")
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(",");
+            format!("module{{{}}}", names)
+        }
+    }
+}
+
+fn lower_defun(defun: Defun) -> FST {
+    FST::SpecialForm(Wrapped {
+        open: SourceToken {
+            leading: defun.left_paren,
+            value: "(".to_string(),
+            trailing: vec![],
+        },
+        inner: SpecialForm {
+            keyword: SourceToken {
+                leading: defun.defun,
+                value: "defun".to_string(),
+                trailing: vec![],
+            },
+            sections: vec![
+                lower_expr(Expr::Identifier(defun.name)),
+                FST::List(Wrapped {
+                    open: SourceToken {
+                        leading: defun.arguments.left_paren,
+                        value: "(".to_string(),
+                        trailing: vec![],
+                    },
+                    inner: defun
+                        .arguments
+                        .args
+                        .into_iter()
+                        .map(|arg| lower_expr(Expr::Identifier(arg)))
+                        .collect(),
+                    close: SourceToken {
+                        leading: defun.arguments.right_paren,
+                        value: ")".to_string(),
+                        trailing: vec![],
+                    },
+                }),
+            ],
+            body: defun.body.into_iter().map(lower_expr).collect(),
+        },
+        close: SourceToken {
+            leading: defun.right_paren,
+            value: ")".to_string(),
+            trailing: vec![],
+        },
+    })
 }
