@@ -207,30 +207,62 @@ fn arguments(input: &mut Input) -> PResult<Arguments> {
     })
 }
 
-fn list(input: &mut Input) -> PResult<List> {
-    let left_bracket = source_token(any.verify(|t| *t == Token::LeftBracket)).parse_next(input)?;
-    let members: Vec<Expr> = repeat(0.., expr).parse_next(input)?;
-    let right_bracket =
-        source_token(any.verify(|t| *t == Token::RightBracket)).parse_next(input)?;
+/// Lists in Pact are optionally followed by a comma.
+fn list_item(input: &mut Input) -> PResult<(Expr, Option<SourceToken<Token>>)> {
+    let value = expr.parse_next(input)?;
+    let comma = opt(source_token(any.verify(|t| *t == Token::Comma))).parse_next(input)?;
+    Ok((value, comma))
+}
 
+fn list(input: &mut Input) -> PResult<List> {
+    let open = source_token(any.verify(|t| *t == Token::LeftBracket)).parse_next(input)?;
+    let members = repeat(0.., list_item).parse_next(input)?;
+    let close = source_token(any.verify(|t| *t == Token::RightBracket)).parse_next(input)?;
     Ok(List {
-        left_bracket,
+        left_bracket: open,
         members,
-        right_bracket,
+        right_bracket: close,
+    })
+}
+
+fn string_or_symbol(input: &mut Input) -> PResult<SourceToken<String>> {
+    source_token(any.verify_map(|t| match t {
+        Token::String(s) => Some(s),
+        Token::Symbol(s) => Some(s),
+        _ => None,
+    }))
+    .parse_next(input)
+}
+
+fn object_item(input: &mut Input) -> PResult<(SourceToken<String>, SourceToken<Token>, Expr)> {
+    let key = string_or_symbol.parse_next(input)?;
+    let sep = source_token(any.verify(|t| *t == Token::Colon)).parse_next(input)?;
+    let value = expr.parse_next(input)?;
+    Ok((key, sep, value))
+}
+
+fn object(input: &mut Input) -> PResult<Object> {
+    let open = source_token(any.verify(|t| *t == Token::LeftBrace)).parse_next(input)?;
+    let members = repeat(0.., object_item).parse_next(input)?;
+    let close = source_token(any.verify(|t| *t == Token::RightBrace)).parse_next(input)?;
+    Ok(Object {
+        left_brace: open,
+        members,
+        right_brace: close,
     })
 }
 
 fn app(input: &mut Input) -> PResult<App> {
-    let left_paren = source_token(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
+    let open = source_token(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
     let func = Box::new(expr.parse_next(input)?);
     let args: Vec<Expr> = repeat(0.., expr).parse_next(input)?;
-    let right_paren = source_token(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
+    let close = source_token(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
 
     Ok(App {
-        left_paren,
+        left_paren: open,
         func,
         args,
-        right_paren,
+        right_paren: close,
     })
 }
 
@@ -240,6 +272,7 @@ fn expr(input: &mut Input) -> PResult<Expr> {
         identifier.map(Expr::Identifier),
         app.map(Expr::Application),
         list.map(Expr::List),
+        object.map(Expr::Object),
     ))
     .parse_next(input)
 }
