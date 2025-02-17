@@ -1,0 +1,5 @@
+---
+source: src/format.rs
+expression: doc.pretty(80)
+---
+(defun square (x) (+ [x] [x]))

@@ -4,6 +4,7 @@ use winnow::prelude::*;
 use winnow::token::any;
 
 use crate::cst::*;
+use crate::format::Spacing;
 use crate::lexer::Token;
 
 pub fn parse(input: &mut Input) -> PResult<Vec<Toplevel>> {
@@ -18,13 +19,7 @@ pub fn whitespace_or_comment(input: &mut Input) -> PResult<Vec<Spacing>> {
     repeat(
         0..,
         any.verify_map(|tok| match tok {
-            Token::Newlines(s) => {
-                if s.lines().count() > 1 {
-                    Some(Spacing::NewlineMany)
-                } else {
-                    Some(Spacing::NewlineOne)
-                }
-            }
+            Token::Newlines(s) => Some(Spacing::Newline(s.lines().count())),
             Token::Comment(s) => Some(Spacing::Comment(s)),
             _ => None,
         }),
@@ -262,7 +257,7 @@ fn top_level(input: &mut Input) -> PResult<Toplevel> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cst::Spacing;
+    use crate::format::Spacing;
     use crate::lexer::Token;
     use logos::Logos;
 
@@ -279,7 +274,7 @@ mod tests {
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap(),
-            vec![Spacing::Comment("; hello".into()), Spacing::NewlineOne]
+            vec![Spacing::Comment("; hello".into()), Spacing::Newline(1)]
         );
     }
 
@@ -293,7 +288,7 @@ mod tests {
         let (leading, fields) = result.unwrap();
         assert_eq!(
             leading,
-            vec![Spacing::Comment("; hello".into()), Spacing::NewlineOne,]
+            vec![Spacing::Comment("; hello".into()), Spacing::Newline(1),]
         );
         assert!(matches!(fields.identifier, s if s == "foo"));
         assert_eq!(fields.type_annotation, None);
@@ -439,7 +434,7 @@ mod tests {
         let (spacing, value) = result.unwrap();
         assert_eq!(
             spacing,
-            vec![Spacing::Comment("; comment".into()), Spacing::NewlineOne]
+            vec![Spacing::Comment("; comment".into()), Spacing::Newline(1)]
         );
         assert!(matches!(value, LiteralValue::Integer(s) if s == "42"));
     }

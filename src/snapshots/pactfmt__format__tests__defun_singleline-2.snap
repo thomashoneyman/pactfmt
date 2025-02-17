@@ -1,0 +1,7 @@
+---
+source: src/format.rs
+expression: doc_narrow.pretty(20)
+---
+(defun square (x)
+  (+ [x] [x])
+)
