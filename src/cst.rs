@@ -1,14 +1,7 @@
-use crate::format::{SourceToken, Spacing, SpecialForm, Wrapped, FST};
-
-/// Spacing that comes before any given token.
-/// For arbitrary tokens, this is best paired like (PrefixSpacing, Token)
-/// But for tokens with known kinds such as '(', the field name usually suffices
-pub type PrefixSpacing = Vec<Spacing>;
-
-/// A type to hold positional information, including:
-///   - Optional leading whitespace/comments
-///   - The token
-pub type Positioned<T> = (PrefixSpacing, T);
+use crate::{
+    format::{SourceToken, SpecialForm, Wrapped, FST},
+    lexer::Token,
+};
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum LiteralValue {
@@ -19,7 +12,7 @@ pub enum LiteralValue {
     Boolean(String),
 }
 
-pub type Literal = Positioned<LiteralValue>;
+pub type Literal = SourceToken<LiteralValue>;
 
 /// A reference like "my-mod.my-name" or "a.b.c.d"
 #[derive(Debug, Clone, PartialEq)]
@@ -55,21 +48,21 @@ pub struct IdentifierFields {
     pub type_annotation: Option<Type>,
 }
 
-pub type Identifier = Positioned<IdentifierFields>;
+pub type Identifier = SourceToken<IdentifierFields>;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct App {
-    pub left_paren: PrefixSpacing,
+    pub left_paren: SourceToken<Token>,
     pub func: Box<Expr>,
     pub args: Vec<Expr>,
-    pub right_paren: PrefixSpacing,
+    pub right_paren: SourceToken<Token>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct List {
-    pub left_bracket: PrefixSpacing,
+    pub left_bracket: SourceToken<Token>,
     pub members: Vec<Expr>,
-    pub right_bracket: PrefixSpacing,
+    pub right_bracket: SourceToken<Token>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -82,9 +75,9 @@ pub enum Expr {
 
 #[derive(Debug, PartialEq)]
 pub struct Arguments {
-    pub left_paren: PrefixSpacing,
+    pub left_paren: SourceToken<Token>,
     pub args: Vec<Identifier>,
-    pub right_paren: PrefixSpacing,
+    pub right_paren: SourceToken<Token>,
 }
 
 // FIXME: Missing doc/model annotations and bare docstrings. Will probably
@@ -93,15 +86,15 @@ pub struct Arguments {
 // and a string for content for a doc and a ...list expr for model(?)
 #[derive(Debug, PartialEq)]
 pub struct Defun {
-    pub left_paren: PrefixSpacing,
-    pub defun: PrefixSpacing,
+    pub left_paren: SourceToken<Token>,
+    pub defun: SourceToken<Token>,
     pub name: Identifier,
     pub arguments: Arguments,
     // FIXME: Technically you can't have a list of expressions in the body,
     // it's really just an optional doc annotation, optional model, and then
     // body, which is a single expr.
     pub body: Vec<Expr>,
-    pub right_paren: PrefixSpacing,
+    pub right_paren: SourceToken<Token>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -119,8 +112,8 @@ pub fn lower_toplevel(toplevel: Toplevel) -> FST {
 
 fn lower_expr(expr: Expr) -> FST {
     match expr {
-        Expr::Literal((spacing, lit_value)) => {
-            let value = match lit_value {
+        Expr::Literal(lit) => {
+            let value = match lit.value {
                 LiteralValue::String(s) => s,
                 LiteralValue::Symbol(s) => s,
                 LiteralValue::Integer(s) => s,
@@ -129,54 +122,54 @@ fn lower_expr(expr: Expr) -> FST {
             };
 
             FST::Literal(SourceToken {
-                leading: spacing,
+                leading: lit.leading,
                 value,
-                trailing: vec![],
+                trailing: lit.trailing,
             })
         }
 
-        Expr::Identifier((spacing, fields)) => {
-            let value = if let Some(type_ann) = fields.type_annotation {
-                format!("{}:{}", fields.identifier, format_type(type_ann))
+        Expr::Identifier(ident) => {
+            let value = if let Some(type_ann) = ident.value.type_annotation {
+                format!("{}:{}", ident.value.identifier, format_type(type_ann))
             } else {
-                fields.identifier
+                ident.value.identifier
             };
 
             FST::Literal(SourceToken {
-                leading: spacing,
+                leading: ident.leading,
                 value,
-                trailing: vec![],
+                trailing: ident.trailing,
             })
         }
 
         Expr::List(list) => FST::List(Wrapped {
             open: SourceToken {
-                leading: list.left_bracket,
+                leading: list.left_bracket.leading,
                 value: "[".to_string(),
-                trailing: vec![],
+                trailing: list.left_bracket.trailing,
             },
             inner: list.members.into_iter().map(lower_expr).collect(),
             close: SourceToken {
-                leading: list.right_bracket,
+                leading: list.right_bracket.leading,
                 value: "]".to_string(),
-                trailing: vec![],
+                trailing: list.right_bracket.trailing,
             },
         }),
 
         Expr::Application(app) => FST::SExp(Wrapped {
             open: SourceToken {
-                leading: app.left_paren,
+                leading: app.left_paren.leading,
                 value: "(".to_string(),
-                trailing: vec![],
+                trailing: app.left_paren.trailing,
             },
             inner: std::iter::once(*app.func)
                 .chain(app.args)
                 .map(lower_expr)
                 .collect(),
             close: SourceToken {
-                leading: app.right_paren,
+                leading: app.right_paren.leading,
                 value: ")".to_string(),
-                trailing: vec![],
+                trailing: app.right_paren.trailing,
             },
         }),
     }
@@ -212,23 +205,23 @@ fn format_type(type_ann: Type) -> String {
 fn lower_defun(defun: Defun) -> FST {
     FST::SpecialForm(Wrapped {
         open: SourceToken {
-            leading: defun.left_paren,
+            leading: defun.left_paren.leading,
             value: "(".to_string(),
-            trailing: vec![],
+            trailing: defun.left_paren.trailing,
         },
         inner: SpecialForm {
             keyword: SourceToken {
-                leading: defun.defun,
+                leading: defun.defun.leading,
                 value: "defun".to_string(),
-                trailing: vec![],
+                trailing: defun.defun.trailing,
             },
             sections: vec![
                 lower_expr(Expr::Identifier(defun.name)),
                 FST::List(Wrapped {
                     open: SourceToken {
-                        leading: defun.arguments.left_paren,
+                        leading: defun.arguments.left_paren.leading,
                         value: "(".to_string(),
-                        trailing: vec![],
+                        trailing: defun.arguments.left_paren.trailing,
                     },
                     inner: defun
                         .arguments
@@ -237,18 +230,18 @@ fn lower_defun(defun: Defun) -> FST {
                         .map(|arg| lower_expr(Expr::Identifier(arg)))
                         .collect(),
                     close: SourceToken {
-                        leading: defun.arguments.right_paren,
+                        leading: defun.arguments.right_paren.leading,
                         value: ")".to_string(),
-                        trailing: vec![],
+                        trailing: defun.arguments.right_paren.trailing,
                     },
                 }),
             ],
             body: defun.body.into_iter().map(lower_expr).collect(),
         },
         close: SourceToken {
-            leading: defun.right_paren,
+            leading: defun.right_paren.leading,
             value: ")".to_string(),
-            trailing: vec![],
+            trailing: defun.right_paren.trailing,
         },
     })
 }

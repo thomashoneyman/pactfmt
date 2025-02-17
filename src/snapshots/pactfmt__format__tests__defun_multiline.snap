@@ -7,8 +7,7 @@ expression: doc_wide.pretty(80)
   [
     "Write"
     (write y 1.0)
-    "definitely"
-    ; hmm
+    "definitely" ; hmm
     "succeeded"
   ]
 )

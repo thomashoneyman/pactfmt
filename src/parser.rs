@@ -4,7 +4,7 @@ use winnow::prelude::*;
 use winnow::token::any;
 
 use crate::cst::*;
-use crate::format::Spacing;
+use crate::format::{SourceToken, Spacing};
 use crate::lexer::Token;
 
 pub fn parse(input: &mut Input) -> PResult<Vec<Toplevel>> {
@@ -27,12 +27,26 @@ pub fn whitespace_or_comment(input: &mut Input) -> PResult<Vec<Spacing>> {
     .parse_next(input)
 }
 
-/// Modifies a parser so it collects leading whitespace/comments
-pub fn positioned<'a, P, O>(parser: P) -> impl Parser<Input<'a>, Positioned<O>, ContextError>
+pub fn source_token<'a, P, O>(parser: P) -> impl Parser<Input<'a>, SourceToken<O>, ContextError>
 where
     P: Parser<Input<'a>, O, ContextError>,
 {
-    (whitespace_or_comment, parser)
+    (
+        whitespace_or_comment,
+        parser,
+        opt(any.verify(|tok| matches!(tok, Token::Comment(_)))),
+    )
+        .map(|(leading, token, trailing)| SourceToken {
+            leading,
+            value: token,
+            trailing: trailing
+                .map(|t| match t {
+                    Token::Comment(s) => Spacing::Comment(s),
+                    _ => unreachable!(),
+                })
+                .into_iter()
+                .collect(),
+        })
 }
 
 fn parse_reference(input: &mut Input) -> PResult<Reference> {
@@ -164,11 +178,11 @@ pub fn identifier(input: &mut Input) -> PResult<Identifier> {
             }),
     ));
 
-    positioned(ident_with_type).parse_next(input)
+    source_token(ident_with_type).parse_next(input)
 }
 
 fn literal(input: &mut Input) -> PResult<Literal> {
-    positioned(any.verify_map(|tok| match tok {
+    source_token(any.verify_map(|tok| match tok {
         Token::String(s) => Some(LiteralValue::String(s)),
         Token::Symbol(s) => Some(LiteralValue::Symbol(s)),
         Token::Integer(s) => Some(LiteralValue::Integer(s)),
@@ -182,9 +196,9 @@ fn literal(input: &mut Input) -> PResult<Literal> {
 
 /// Parse an arguments list
 fn arguments(input: &mut Input) -> PResult<Arguments> {
-    let (left_paren, _) = positioned(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
+    let left_paren = source_token(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
     let args: Vec<Identifier> = repeat(0.., identifier).parse_next(input)?;
-    let (right_paren, _) = positioned(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
+    let right_paren = source_token(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
 
     Ok(Arguments {
         left_paren,
@@ -194,11 +208,10 @@ fn arguments(input: &mut Input) -> PResult<Arguments> {
 }
 
 fn list(input: &mut Input) -> PResult<List> {
-    let (left_bracket, _) =
-        positioned(any.verify(|t| *t == Token::LeftBracket)).parse_next(input)?;
+    let left_bracket = source_token(any.verify(|t| *t == Token::LeftBracket)).parse_next(input)?;
     let members: Vec<Expr> = repeat(0.., expr).parse_next(input)?;
-    let (right_bracket, _) =
-        positioned(any.verify(|t| *t == Token::RightBracket)).parse_next(input)?;
+    let right_bracket =
+        source_token(any.verify(|t| *t == Token::RightBracket)).parse_next(input)?;
 
     Ok(List {
         left_bracket,
@@ -208,10 +221,10 @@ fn list(input: &mut Input) -> PResult<List> {
 }
 
 fn app(input: &mut Input) -> PResult<App> {
-    let (left_paren, _) = positioned(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
+    let left_paren = source_token(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
     let func = Box::new(expr.parse_next(input)?);
     let args: Vec<Expr> = repeat(0.., expr).parse_next(input)?;
-    let (right_paren, _) = positioned(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
+    let right_paren = source_token(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
 
     Ok(App {
         left_paren,
@@ -233,12 +246,12 @@ fn expr(input: &mut Input) -> PResult<Expr> {
 
 // Parse a wrapped function definition
 pub fn defun(input: &mut Input) -> PResult<Defun> {
-    let (left_paren, _) = positioned(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
-    let (defun, _) = positioned(any.verify(|t| *t == Token::Defun)).parse_next(input)?;
+    let left_paren = source_token(any.verify(|t| *t == Token::LeftParen)).parse_next(input)?;
+    let defun = source_token(any.verify(|t| *t == Token::Defun)).parse_next(input)?;
     let name = identifier.parse_next(input)?;
     let arguments = arguments.parse_next(input)?;
     let body = repeat(1.., expr).parse_next(input)?;
-    let (right_paren, _) = positioned(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
+    let right_paren = source_token(any.verify(|t| *t == Token::RightParen)).parse_next(input)?;
 
     Ok(Defun {
         left_paren,
@@ -285,13 +298,14 @@ mod tests {
         let result = identifier.parse_next(&mut input);
 
         assert!(result.is_ok());
-        let (leading, fields) = result.unwrap();
+        let SourceToken { leading, value, .. } = result.unwrap();
         assert_eq!(
             leading,
             vec![Spacing::Comment("; hello".into()), Spacing::Newline(1),]
         );
-        assert!(matches!(fields.identifier, s if s == "foo"));
-        assert_eq!(fields.type_annotation, None);
+        assert!(
+            matches!(value, IdentifierFields { identifier, type_annotation } if identifier == "foo" && type_annotation.is_none())
+        );
     }
 
     #[test]
@@ -420,8 +434,8 @@ mod tests {
         let mut input = tokens.as_slice();
         let result = literal.parse_next(&mut input);
         assert!(result.is_ok());
-        let (spacing, value) = result.unwrap();
-        assert!(spacing.is_empty());
+        let SourceToken { leading, value, .. } = result.unwrap();
+        assert!(leading.is_empty());
         assert!(matches!(value, LiteralValue::Integer(s) if s == "42"));
     }
 
@@ -431,9 +445,9 @@ mod tests {
         let mut input = tokens.as_slice();
         let result = literal.parse_next(&mut input);
         assert!(result.is_ok());
-        let (spacing, value) = result.unwrap();
+        let SourceToken { leading, value, .. } = result.unwrap();
         assert_eq!(
-            spacing,
+            leading,
             vec![Spacing::Comment("; comment".into()), Spacing::Newline(1)]
         );
         assert!(matches!(value, LiteralValue::Integer(s) if s == "42"));
@@ -496,8 +510,8 @@ mod tests {
             let mut input = tokens.as_slice();
             let result = identifier.parse_next(&mut input);
             assert!(result.is_ok(), "Failed to parse: {:?}", input);
-            let (_, fields) = result.unwrap();
-            assert_eq!(fields.type_annotation.unwrap(), expected_type);
+            let SourceToken { value, .. } = result.unwrap();
+            assert_eq!(value.type_annotation.unwrap(), expected_type);
         }
     }
 

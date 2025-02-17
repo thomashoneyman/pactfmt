@@ -7,7 +7,7 @@ pub enum Spacing {
     Comment(String),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct SourceToken<T> {
     pub leading: Vec<Spacing>,
     pub value: T,
