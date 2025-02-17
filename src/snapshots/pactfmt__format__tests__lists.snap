@@ -1,0 +1,11 @@
+---
+source: src/format.rs
+expression: doc_wide.pretty(80)
+---
+[1 2 3]
+[1 2 3]
+[1 2 3]
+[
+  1 ;hm
+  2
+]

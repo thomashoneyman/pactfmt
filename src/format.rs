@@ -14,15 +14,21 @@ pub struct SourceToken<T> {
     pub trailing: Vec<Spacing>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Wrapped<T> {
     pub open: SourceToken<String>,
     pub inner: T,
     pub close: SourceToken<String>,
 }
 
-#[derive(Debug)]
-pub struct KeyVal {
+#[derive(Debug, PartialEq, Clone)]
+pub struct ListItem {
+    pub value: FST,
+    pub comma: Option<SourceToken<String>>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct ObjectItem {
     pub key: SourceToken<String>,
     pub sep: SourceToken<String>,
     pub value: FST,
@@ -30,7 +36,7 @@ pub struct KeyVal {
 
 /// A special form is a keyword followed by a list of sections and a body.
 /// (defun NAME (arg1 arg2) body1 body2)
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct SpecialForm {
     pub keyword: SourceToken<String>,
     pub sections: Vec<FST>,
@@ -40,11 +46,11 @@ pub struct SpecialForm {
 /// A 'format syntax tree' is an intermediate representation of the CST simplified for formatting.
 #[allow(dead_code)] // remove once we implement object
 #[allow(clippy::upper_case_acronyms)] // Allow FST instead of Fst
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum FST {
     Literal(SourceToken<String>),
     List(Wrapped<Vec<FST>>),
-    Object(Wrapped<Vec<KeyVal>>),
+    Object(Wrapped<Vec<ObjectItem>>),
     SExp(Wrapped<Vec<FST>>),
     SpecialForm(Wrapped<SpecialForm>),
 }
@@ -89,7 +95,7 @@ impl FST {
 
             FST::Object(Wrapped { open, inner, close }) => {
                 let mut result = FormatDoc::nil(allocator);
-                let mut iter = inner.iter().map(|KeyVal { key, sep, value }| {
+                let mut iter = inner.iter().map(|ObjectItem { key, sep, value }| {
                     format_with_comments(
                         &key.leading,
                         &key.trailing,
@@ -101,6 +107,7 @@ impl FST {
                         FormatDoc::text(allocator, sep.value.clone()),
                     ))
                     .join_space(value.format(allocator))
+                    .nest(2)
                 });
                 if let Some(first) = iter.next() {
                     result = first;

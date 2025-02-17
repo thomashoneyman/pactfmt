@@ -1,7 +1,5 @@
-use crate::{
-    format::{SourceToken, SpecialForm, Wrapped, FST},
-    lexer::Token,
-};
+use crate::format::{ObjectItem, SourceToken, SpecialForm, Wrapped, FST};
+use crate::lexer::Token;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum LiteralValue {
@@ -61,8 +59,15 @@ pub struct App {
 #[derive(Debug, PartialEq, Clone)]
 pub struct List {
     pub left_bracket: SourceToken<Token>,
-    pub members: Vec<Expr>,
+    pub members: Vec<(Expr, Option<SourceToken<Token>>)>,
     pub right_bracket: SourceToken<Token>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Object {
+    pub left_brace: SourceToken<Token>,
+    pub members: Vec<(SourceToken<String>, SourceToken<Token>, Expr)>,
+    pub right_brace: SourceToken<Token>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -71,6 +76,7 @@ pub enum Expr {
     Literal(Literal),
     Application(App),
     List(List),
+    Object(Object),
 }
 
 #[derive(Debug, PartialEq)]
@@ -148,11 +154,72 @@ fn lower_expr(expr: Expr) -> FST {
                 value: "[".to_string(),
                 trailing: list.left_bracket.trailing,
             },
-            inner: list.members.into_iter().map(lower_expr).collect(),
+            // Lists are optionally followed by commas, but the formatter should
+            // always strip these while preserving comments.
+            inner: list
+                .members
+                .into_iter()
+                .map(|(mut expr, separator)| {
+                    if let Some(sep) = separator {
+                        if !sep.leading.is_empty() || !sep.trailing.is_empty() {
+                            match &mut expr {
+                                Expr::Literal(lit) => {
+                                    lit.trailing.extend(sep.leading);
+                                    lit.trailing.extend(sep.trailing);
+                                }
+                                Expr::Identifier(ident) => {
+                                    ident.trailing.extend(sep.leading);
+                                    ident.trailing.extend(sep.trailing);
+                                }
+                                Expr::Application(app) => {
+                                    app.right_paren.trailing.extend(sep.leading);
+                                    app.right_paren.trailing.extend(sep.trailing);
+                                }
+                                Expr::List(list) => {
+                                    list.right_bracket.trailing.extend(sep.leading);
+                                    list.right_bracket.trailing.extend(sep.trailing);
+                                }
+                                Expr::Object(obj) => {
+                                    obj.right_brace.trailing.extend(sep.leading);
+                                    obj.right_brace.trailing.extend(sep.trailing);
+                                }
+                            }
+                        }
+                    }
+                    lower_expr(expr)
+                })
+                .collect(),
             close: SourceToken {
                 leading: list.right_bracket.leading,
                 value: "]".to_string(),
                 trailing: list.right_bracket.trailing,
+            },
+        }),
+
+        Expr::Object(obj) => FST::Object(Wrapped {
+            open: SourceToken {
+                leading: obj.left_brace.leading,
+                value: "{".to_string(),
+                trailing: obj.left_brace.trailing,
+            },
+            //Object(Wrapped<Vec<ObjectItem>>),
+            inner: obj
+                .members
+                .into_iter()
+                .map(|(key, colon, value)| ObjectItem {
+                    key,
+                    sep: SourceToken {
+                        leading: colon.leading,
+                        value: ":".to_string(),
+                        trailing: colon.trailing,
+                    },
+                    value: lower_expr(value),
+                })
+                .collect(),
+            close: SourceToken {
+                leading: obj.right_brace.leading,
+                value: "}".to_string(),
+                trailing: obj.right_brace.trailing,
             },
         }),
 
@@ -227,7 +294,7 @@ fn lower_defun(defun: Defun) -> FST {
                         .arguments
                         .args
                         .into_iter()
-                        .map(|arg| lower_expr(Expr::Identifier(arg)))
+                        .map(|tok| lower_expr(Expr::Identifier(tok)))
                         .collect(),
                     close: SourceToken {
                         leading: defun.arguments.right_paren.leading,
