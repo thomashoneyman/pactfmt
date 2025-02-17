@@ -13,8 +13,7 @@ expression: doc_narrow.pretty(20)
   [
     "Write"
     (write y 1.0)
-    "definitely"
-    ; hmm
+    "definitely" ; hmm
     "succeeded"
   ]
 )
