@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use format::{format_source, check_source};
+use format::{check_source, format_source};
 use std::io::{self, Read};
 
 #[derive(Debug, Parser)]

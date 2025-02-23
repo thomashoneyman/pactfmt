@@ -1,4 +1,4 @@
-use format::{lexer, parser, cst, FormatDoc};
+use format::{cst, lexer, parser, FormatDoc};
 use logos::Logos;
 use pretty::RcAllocator;
 
