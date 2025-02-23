@@ -1,221 +1,7 @@
 use pretty::{Doc, DocAllocator, DocBuilder};
-use std::{cmp, convert::identity};
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum Spacing {
-    Newline(usize),
-    Comment(String),
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct SourceToken<T> {
-    pub leading: Vec<Spacing>,
-    pub value: T,
-    pub trailing: Vec<Spacing>,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct Wrapped<T> {
-    pub open: SourceToken<String>,
-    pub inner: T,
-    pub close: SourceToken<String>,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct ListItem {
-    pub value: FST,
-    pub comma: Option<SourceToken<String>>,
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct ObjectItem {
-    pub key: SourceToken<String>,
-    pub sep: SourceToken<String>,
-    pub value: FST,
-}
-
-/// A special form is a keyword followed by a list of sections and a body.
-/// (defun NAME (arg1 arg2) body1 body2)
-#[derive(Debug, PartialEq, Clone)]
-pub struct SpecialForm {
-    pub keyword: SourceToken<String>,
-    pub sections: Vec<FST>,
-    pub body: Vec<FST>,
-}
-
-/// A 'format syntax tree' is an intermediate representation of the CST simplified for formatting.
-#[allow(dead_code)] // remove once we implement object
-#[allow(clippy::upper_case_acronyms)] // Allow FST instead of Fst
-#[derive(Debug, PartialEq, Clone)]
-pub enum FST {
-    Literal(SourceToken<String>),
-    List(Wrapped<Vec<FST>>),
-    Object(Wrapped<Vec<ObjectItem>>),
-    SExp(Wrapped<Vec<FST>>),
-    SpecialForm(Wrapped<SpecialForm>),
-}
-
-impl FST {
-    pub fn format<'a, D>(&'a self, allocator: &'a D) -> FormatDoc<'a, D>
-    where
-        D: DocAllocator<'a, ()>,
-        D::Doc: Clone,
-    {
-        match self {
-            FST::Literal(SourceToken {
-                leading,
-                value,
-                trailing,
-            }) => format_with_comments(leading, trailing, FormatDoc::text(allocator, value)),
-
-            FST::List(Wrapped { open, inner, close }) => {
-                let mut result = FormatDoc::nil(allocator);
-                let mut iter = inner.iter().map(|item| item.format(allocator));
-                if let Some(first) = iter.next() {
-                    result = first;
-                    for doc in iter {
-                        result = result.join_line(doc)
-                    }
-                }
-
-                format_with_comments(
-                    &open.leading,
-                    &open.trailing,
-                    FormatDoc::text(allocator, &open.value),
-                )
-                .join_line_(result)
-                .nest(2)
-                .join_line_(format_with_comments(
-                    &close.leading,
-                    &close.trailing,
-                    FormatDoc::text(allocator, &close.value),
-                ))
-                .group()
-            }
-
-            FST::Object(Wrapped { open, inner, close }) => {
-                let mut result = FormatDoc::nil(allocator);
-                let mut iter = inner.iter().map(|ObjectItem { key, sep, value }| {
-                    format_with_comments(
-                        &key.leading,
-                        &key.trailing,
-                        FormatDoc::text(allocator, key.value.clone()),
-                    )
-                    .append(format_with_comments(
-                        &sep.leading,
-                        &sep.trailing,
-                        FormatDoc::text(allocator, sep.value.clone()),
-                    ))
-                    .join_space(value.format(allocator))
-                    .nest(2)
-                });
-                if let Some(first) = iter.next() {
-                    result = first;
-                    for doc in iter {
-                        result = result.join_line(doc)
-                    }
-                }
-
-                format_with_comments(
-                    &open.leading,
-                    &open.trailing,
-                    FormatDoc::text(allocator, &open.value),
-                )
-                .join_line_(result)
-                .nest(2)
-                .join_line_(format_with_comments(
-                    &close.leading,
-                    &close.trailing,
-                    FormatDoc::text(allocator, &close.value),
-                ))
-                .group()
-            }
-
-            FST::SExp(Wrapped { open, inner, close }) => {
-                let mut result = FormatDoc::nil(allocator);
-                let mut iter = inner.iter().map(|item| item.format(allocator));
-                if let Some(first) = iter.next() {
-                    result = first;
-                    for doc in iter {
-                        result = result.join_line(doc);
-                    }
-                }
-
-                format_with_comments(
-                    &open.leading,
-                    &open.trailing,
-                    FormatDoc::text(allocator, &open.value)
-                        .append(result.nest(2))
-                        .append(format_with_comments(
-                            &close.leading,
-                            &close.trailing,
-                            FormatDoc::text(allocator, &close.value),
-                        ))
-                        .group(),
-                )
-            }
-
-            FST::SpecialForm(Wrapped {
-                open,
-                inner:
-                    SpecialForm {
-                        keyword,
-                        sections,
-                        body,
-                    },
-                close,
-            }) => {
-                let open = format_with_comments(
-                    &open.leading,
-                    &open.trailing,
-                    FormatDoc::text(allocator, &open.value),
-                );
-
-                let keyword = format_with_comments(
-                    &keyword.leading,
-                    &keyword.trailing,
-                    FormatDoc::text(allocator, keyword.value.clone()),
-                );
-
-                let close = format_with_comments(
-                    &close.leading,
-                    &close.trailing,
-                    FormatDoc::text(allocator, &close.value),
-                );
-
-                let mut sections_doc = FormatDoc::nil(allocator);
-                let mut sections_iter = sections.iter().map(|item| item.format(allocator));
-                if let Some(first) = sections_iter.next() {
-                    sections_doc = first;
-                    for doc in sections_iter {
-                        sections_doc = sections_doc.join_line(doc);
-                    }
-                }
-
-                let mut body_doc = FormatDoc::nil(allocator);
-                let mut body_iter = body.iter().map(|item| item.format(allocator));
-                if let Some(first) = body_iter.next() {
-                    body_doc = first;
-                    for doc in body_iter {
-                        body_doc = body_doc.join_line(doc);
-                    }
-                }
-
-                let content = if !doc_is_nil(&keyword.leading.doc) {
-                    keyword
-                        .join_line(sections_doc)
-                        .group()
-                        .join_line(body_doc)
-                        .nest(2)
-                } else {
-                    keyword.join_space(sections_doc).group().join_line(body_doc)
-                };
-
-                open.append(content).nest(2).join_line_(close).group()
-            }
-        }
-    }
-}
+use std::cmp;
+use std::convert::identity;
+use syntax::cst::Spacing;
 
 /// A hint to the pretty printer to break a line or add a space. For example,
 /// a user-provided newline should break the line even if the pretty layout
@@ -279,7 +65,7 @@ fn breaks<'a, D: DocAllocator<'a, ()>>(
 }
 
 /// Check if a DocBuilder is nil.
-fn doc_is_nil<'a, D: DocAllocator<'a, ()>>(doc: &DocBuilder<'a, D, ()>) -> bool {
+pub fn doc_is_nil<'a, D: DocAllocator<'a, ()>>(doc: &DocBuilder<'a, D, ()>) -> bool {
     matches!(&**doc, Doc::Nil)
 }
 
@@ -289,17 +75,17 @@ pub struct Leading<'a, D: DocAllocator<'a, ()>>
 where
     D::Doc: Clone,
 {
-    doc: DocBuilder<'a, D, ()>,
-    left: Force,
-    lines: usize,
-    right: Force,
+    pub doc: DocBuilder<'a, D, ()>,
+    pub left: Force,
+    pub lines: usize,
+    pub right: Force,
 }
 
 impl<'a, D: DocAllocator<'a, ()>> Leading<'a, D>
 where
     D::Doc: Clone,
 {
-    fn nil(allocator: &'a D) -> Self {
+    pub fn nil(allocator: &'a D) -> Self {
         Self {
             doc: allocator.nil(),
             left: Force::None,
@@ -308,7 +94,7 @@ where
         }
     }
 
-    fn append(self, other: Self) -> Self {
+    pub fn append(self, other: Self) -> Self {
         // If first doc is empty, return second with combined metadata
         if doc_is_nil(&self.doc) {
             return Self {
@@ -361,9 +147,9 @@ pub struct Trailing<'a, D: DocAllocator<'a, ()>>
 where
     D::Doc: Clone,
 {
-    doc: DocBuilder<'a, D, ()>,
-    left: Force,
-    right: Force,
+    pub doc: DocBuilder<'a, D, ()>,
+    pub left: Force,
+    pub right: Force,
 }
 
 impl<'a, D: DocAllocator<'a, ()>> Trailing<'a, D>
@@ -457,7 +243,7 @@ where
     }
 }
 
-fn format_with_comments<'a, D>(
+pub fn format_with_comments<'a, D>(
     leading: &[Spacing],
     trailing: &[Spacing],
     doc: FormatDoc<'a, D>,
@@ -499,10 +285,10 @@ pub struct FormatDoc<'a, D: DocAllocator<'a, ()>>
 where
     D::Doc: Clone,
 {
-    doc: DocBuilder<'a, D, ()>,
-    is_empty: bool,
-    leading: Leading<'a, D>,
-    trailing: Trailing<'a, D>,
+    pub doc: DocBuilder<'a, D, ()>,
+    pub is_empty: bool,
+    pub leading: Leading<'a, D>,
+    pub trailing: Trailing<'a, D>,
 }
 
 impl<'a, D: DocAllocator<'a, ()>> FormatDoc<'a, D>
@@ -518,15 +304,15 @@ where
         }
     }
 
-    fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.is_empty
     }
 
-    fn text(allocator: &'a D, value: impl Into<String>) -> Self {
+    pub fn text(allocator: &'a D, value: impl Into<String>) -> Self {
         Self::from_doc(allocator.text(value.into()))
     }
 
-    fn from_doc(doc: DocBuilder<'a, D, ()>) -> Self {
+    pub fn from_doc(doc: DocBuilder<'a, D, ()>) -> Self {
         let allocator = doc.0;
         if matches!(*doc, Doc::Nil) {
             Self::nil(allocator)
@@ -542,7 +328,7 @@ where
 
     /// Convert the FormatDoc to a DocBuilder, applying leading and trailing
     /// comments and spacing.
-    fn docbuilder(self) -> DocBuilder<'a, D, ()> {
+    pub fn docbuilder(self) -> DocBuilder<'a, D, ()> {
         let allocator = self.doc.0;
         if self.is_empty {
             allocator.nil()
@@ -563,8 +349,8 @@ where
         join_docs(self, other, |force, doc| apply_force(identity, force, doc))
     }
 
-    /// Joins with space()
-    fn join_space(self, other: Self) -> Self {
+    /// joins with space()
+    pub fn join_space(self, other: Self) -> Self {
         let allocator = self.doc.0;
         join_docs(self, other, |force, doc| {
             apply_force(|d| allocator.space().append(d), force, doc)
@@ -572,7 +358,7 @@ where
     }
 
     /// Joins with line(), which is a space break
-    fn join_line(self, other: Self) -> Self {
+    pub fn join_line(self, other: Self) -> Self {
         let allocator = self.doc.0;
         join_docs(self, other, |force, doc| {
             apply_force(|d| allocator.line().append(d), force, doc)
@@ -580,21 +366,21 @@ where
     }
 
     /// Joins with line_(), which is a soft break
-    fn join_line_(self, other: Self) -> Self {
+    pub fn join_line_(self, other: Self) -> Self {
         let allocator = self.doc.0;
         join_docs(self, other, |force, doc| {
             apply_force(|d| allocator.line_().append(d), force, doc)
         })
     }
 
-    fn group(self) -> Self {
+    pub fn group(self) -> Self {
         Self {
             doc: self.doc.group(),
             ..self
         }
     }
 
-    fn nest(self, n: isize) -> Self {
+    pub fn nest(self, n: isize) -> Self {
         Self {
             doc: self.doc.nest(n),
             ..self

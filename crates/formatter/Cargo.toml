@@ -1,9 +1,10 @@
 [package]
-name = "format"
+name = "formatter"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+syntax = { path = "../syntax" }
 logos = "0.14.2"
 pretty = "0.12.3"
 winnow = "0.6.20"
