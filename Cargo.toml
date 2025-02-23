@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/format"]
+members = ["crates/formatter", "crates/syntax"]
 
 [package]
 name = "pactfmt"
@@ -7,5 +7,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-format = { path = "crates/format" }
 clap = { version = "4.5.20", features = ["derive"] }
+formatter = { path = "crates/formatter" }
+syntax = { path = "crates/syntax" }

@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use format::{check_source, format_source};
+use formatter::{check_source, format_source};
 use std::io::{self, Read};
 
 #[derive(Debug, Parser)]
@@ -55,7 +55,7 @@ fn main() -> io::Result<()> {
                 }
             };
 
-            let formatted = format_source(&content);
+            let formatted = format_source(&content, 80);
             println!("{}", formatted);
             Ok(())
         }

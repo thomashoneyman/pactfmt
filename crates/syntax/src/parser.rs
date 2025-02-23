@@ -4,7 +4,6 @@ use winnow::prelude::*;
 use winnow::token::any;
 
 use crate::cst::*;
-use crate::format::{SourceToken, Spacing};
 use crate::lexer::Token;
 
 pub fn parse(input: &mut Input) -> PResult<Vec<Toplevel>> {
@@ -303,7 +302,6 @@ fn top_level(input: &mut Input) -> PResult<Toplevel> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::format::Spacing;
     use crate::lexer::Token;
     use logos::Logos;
 
