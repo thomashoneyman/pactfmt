@@ -1,6 +1,6 @@
 ---
-source: src/format.rs
-expression: doc_wide.pretty(80)
+source: crates/format/tests/tests.rs
+expression: doc.pretty(40)
 ---
 (defun f (x:object{schema} y:[integer])
   (+ x (write y 1.0))

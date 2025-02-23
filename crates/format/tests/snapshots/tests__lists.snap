@@ -1,0 +1,11 @@
+---
+source: crates/format/tests/tests.rs
+expression: doc.pretty(40)
+---
+[1 2 3]
+[1 2 3]
+[1 2 3]
+[
+  1 ;hm
+  2
+]

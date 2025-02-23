@@ -1,13 +1,5 @@
-mod cst;
-mod format;
-mod lexer;
-mod parser;
-
 use clap::{Parser, Subcommand};
-use lexer::Token;
-use logos::Logos;
-use parser::parse;
-use pretty::RcAllocator;
+use format::{check_source, format_source};
 use std::io::{self, Read};
 
 #[derive(Debug, Parser)]
@@ -45,7 +37,12 @@ fn main() -> io::Result<()> {
                     buffer
                 }
             };
-            println!("Checked!\n{}", content);
+            if check_source(&content) {
+                println!("Syntax OK");
+            } else {
+                eprintln!("Syntax Error");
+                std::process::exit(1);
+            }
             Ok(())
         }
         Some(Commands::Format { input }) => {
@@ -58,26 +55,13 @@ fn main() -> io::Result<()> {
                 }
             };
 
-            let lexed = Token::lexer(&content);
-            let lexed_ok: Vec<_> = lexed.filter_map(|token| token.ok()).collect();
-            let parsed = parse(&mut lexed_ok.as_slice()).expect("failed to parse");
-            let lowered = parsed
-                .into_iter()
-                .map(cst::lower_toplevel)
-                .collect::<Vec<_>>();
-            let format_doc = lowered
-                .iter()
-                .fold(format::FormatDoc::nil(&RcAllocator), |acc, fst| {
-                    acc.append(fst.format(&RcAllocator))
-                });
-            let formatted = format_doc.pretty(80);
-
-            println!("Formatted!\n{}", formatted);
+            let formatted = format_source(&content);
+            println!("{}", formatted);
             Ok(())
         }
         _ => {
-            println!("Unrecognized!");
-            Ok(())
+            println!("Unrecognized command!");
+            std::process::exit(1);
         }
     }
 }

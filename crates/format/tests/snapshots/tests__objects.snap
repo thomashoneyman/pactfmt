@@ -1,6 +1,6 @@
 ---
-source: src/format.rs
-expression: doc_narrow.pretty(20)
+source: crates/format/tests/tests.rs
+expression: doc.pretty(40)
 ---
 {
   'name: "Alice"
@@ -13,24 +13,14 @@ expression: doc_narrow.pretty(20)
   'b: 2.5
   "deeply-nested": {
       'x: [1 2 3]
-      "y": {
-          'z: "inner"
-        }
+      "y": {'z: "inner"}
     }
 }
 
 {
   "empty-obj": {}
-  'symbols: [
-      'a
-      'b
-      'c
-    ]
-  "strings": [
-      "x"
-      "y"
-      "z"
-    ]
+  'symbols: ['a 'b 'c]
+  "strings": ["x" "y" "z"]
 }
 
 {
