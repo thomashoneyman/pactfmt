@@ -78,7 +78,7 @@ Def =
   Defun     // Function definition - defines a named function with parameters and body
 | DefConst  // Constant definition - defines a named constant value
 | DefCap    // Capability definition - defines an access control mechanism
-| DefSchema // Schema definition - defines a data structure schema
+| DefSchema // Schema definition - defines a new type
 | DefTable  // Table definition - defines a database table with a schema
 | DefPact   // Pact (multi-step transaction) definition - defines a cross-chain transaction
 
@@ -87,7 +87,6 @@ Def =
 Defun = '(' 'defun' name:'ident' TypeAnn? '(' Arg* ')' Documentation? Expr* ')'
 
 // Constant definition - defines a named constant value
-// Constants are evaluated once at module load time
 DefConst = '(' 'defconst' name:'ident' TypeAnn? Expr Documentation? ')'
 
 // Capability definition - defines a capability (access control mechanism)
@@ -96,12 +95,10 @@ DefConst = '(' 'defconst' name:'ident' TypeAnn? Expr Documentation? ')'
 DefCap = '(' 'defcap' name:'ident' TypeAnn? '(' Arg* ')' Documentation? CapMeta* Expr* ')'
 
 // Schema definition - defines a data structure schema (like a record type)
-// Schemas define the structure of data stored in tables and passed between functions
 DefSchema = '(' 'defschema' name:'ident' Documentation? SchemaArg* ')'
 
 // Table definition - defines a database table with a schema
-// Tables store persistent data in the blockchain
-DefTable = '(' 'deftable' name:'ident' ':' '{' schema:ParsedName '}' DocString? ')'
+DefTable = '(' 'deftable' name:'ident' ':' '{' schema:ParsedName '}' (DocString | Doc)? ')'
 
 // Pact definition - defines a multi-step transaction
 // Used for cross-chain transactions and complex multi-stage operations
@@ -110,9 +107,9 @@ DefPact = '(' 'defpact' name:'ident' TypeAnn? '(' Arg* ')' Documentation? PactSt
 // Pact steps - individual steps in a multi-step transaction
 // Steps can be executed across different chains and transactions
 PactStep =
-  '(' 'step' entity:ParsedName? body:Expr Model? ')'                             // Regular step
-| '(' 'step-with-rollback' entity:ParsedName? body:Expr rollback:Expr Model? ')' // Step with rollback handler
-| '(' 'resume' binding:Binding body:Expr* ')'                              // Resume step with binding to access yielded values from previous step
+  '(' 'step' entity:ParsedName? body:Expr Model? ')'
+| '(' 'step-with-rollback' entity:ParsedName? body:Expr rollback:Expr Model? ')'
+| '(' 'resume' binding:Binding body:Expr* ')'
 
 // Interface definitions - definitions that can appear in an interface
 // These provide signatures without implementations
@@ -156,7 +153,7 @@ Type =
 
 // Primitive types
 PrimType =
-  'int'
+  'integer'
 | 'decimal'
 | 'bool'
 | 'string'
