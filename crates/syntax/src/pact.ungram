@@ -87,12 +87,12 @@ Def =
 Defun = '(' 'defun' name:'ident' TypeAnn? '(' Arg* ')' Documentation? Expr* ')'
 
 // Constant definition - defines a named constant value
-DefConst = '(' 'defconst' name:'ident' TypeAnn? Expr Documentation? ')'
+DefConst = '(' 'defconst' name:'ident' TypeAnn? Documentation? Expr ')'
 
 // Capability definition - defines a capability (access control mechanism)
 // Must have at least one expression in the body
 // Can include metadata like @event and @managed
-DefCap = '(' 'defcap' name:'ident' TypeAnn? '(' Arg* ')' Documentation? CapMeta* Expr* ')'
+DefCap = '(' 'defcap' name:'ident' TypeAnn? '(' Arg* ')' Documentation? (CapMeta | Expr)* ')'
 
 // Schema definition - defines a data structure schema (like a record type)
 DefSchema = '(' 'defschema' name:'ident' Documentation? SchemaArg* ')'
@@ -144,12 +144,15 @@ CapMeta =
 Arg = name:'ident' TypeAnn?
 SchemaArg = name:'ident' TypeAnn  // Schema field (always has a type)
 
+TypeAnn = ':' Type  // Type annotation
+
 Type =
   PrimType                        // Primitive type
 | '[' Type ']'                    // List type
-| 'module' '{' QualifiedName* '}'       // Module reference type, comma separated
-| 'ident' '{' ParsedTyName '}'    // Object/Table type
-| '*'                             // Any type (wildcard)
+| 'module' '{' QualifiedName* '}' // Module reference type, comma separated
+| 'object' '{' ParsedTyName '}'   // Schema type for objects
+| 'ident' '{' ParsedTyName '}'    // Schema type for tables
+| '*'                             // Any type (for lists)
 
 // Primitive types
 PrimType =
@@ -165,7 +168,6 @@ PrimType =
 | 'object'
 | 'table'
 
-TypeAnn = ':' Type  // Type annotation
 
 // Expressions - the core computational elements
 Expr =
@@ -185,9 +187,7 @@ Var =
 | ModRef         // Module reference (e.g., "ns::name")
 
 // Let binding - local variable definitions
-Let =
-  '(' 'let' '(' Binder* ')' Expr* ')'    // Regular let (parallel bindings)
-| '(' 'let*' '(' Binder* ')' Expr* ')'   // Sequential let (each binding sees previous ones)
+Let = '(' ('let' | 'let*') '(' Binder* ')' Expr* ')'
 
 Binder = '(' name:'ident' TypeAnn? value:Expr ')'
 
