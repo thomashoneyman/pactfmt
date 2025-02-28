@@ -169,16 +169,15 @@ PrimType =
 | 'table'
 
 
-// Expressions - the core computational elements
 Expr =
-  Var       // Variable reference
-| Let       // Let binding
-| Lam       // Lambda expression
-| App       // Function application
-| List      // List literal
-| Literal   // Constant/literal value
-| Object    // Object literal
-| Binding   // Binding form (for named arguments)
+  Var
+| Let
+| Lam
+| App
+| List
+| Literal
+| Object
+| Binding
 
 // Variable reference - refers to a defined name
 Var =
@@ -194,21 +193,16 @@ Binder = '(' name:'ident' TypeAnn? value:Expr ')'
 // Lambda expression - anonymous function
 Lam = '(' 'lambda' '(' Arg* ')' Expr* ')'
 
-// Function application - calling a function
-App = '(' fn:Expr args:Expr* bindings:BindingForm* ')'
+// Basic function application
+App = '(' fn:ParsedName args:Expr* ')'
 
-BindingForm = '{' BindPair* '}' // Named argument binding form: { "a" := 1, ... }
+Binding = '{' BindPair* '}' // Named argument binding form: { "a" := 1, ... }
 
-// List literal - creates a list
 // Note: In Pact, list elements can be separated by spaces or commas
 List = '[' items:Expr* ']'
 
-// Object literal - creates an object/record
 Object = '{' fields:FieldPair* '}'
 FieldPair = key:StringOrSymbol ':' value:Expr
-
-// Binding form - for named arguments and destructuring
-Binding = '{' binds:BindPair* '}' body:Expr*
 
 // Binding pair - key-value pair in a binding form
 // The key is a string or symbol, followed by := and an argument (which may have a type annotation)
