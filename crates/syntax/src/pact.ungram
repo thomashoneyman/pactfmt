@@ -15,7 +15,7 @@ TopLevel =
 
 // Module definition - the primary organizational unit in Pact
 // Contains definitions, imports, and other declarations
-Module = '(' 'module' name:'ident' gov:Governance Documentation? ExternalDecl* Def* ')'
+Module = '(' 'module' name:'ident' gov:Governance Documentation? (ExternalDecl | Def)* ')'
 
 // Interface definition - defines a contract that modules can implement
 // Interfaces contain function signatures, constants, and schemas but no implementations
@@ -46,7 +46,7 @@ Doc = '@doc' StringLiteral
 // Model annotation for formal verification
 // Contains a list of property expressions enclosed in square brackets
 // Used to specify invariants and properties for formal verification
-Model = '@model' '[' PropertyExpr* ']'
+Model = '@model' PropList
 
 // External declarations - declarations that reference things outside the module
 // These establish relationships with other modules and interfaces
@@ -58,7 +58,7 @@ ExternalDecl =
 // Import declaration - brings definitions from other modules into scope
 // The string is an optional hash for version pinning
 // The ImportList is an optional list of specific names to import
-Use = '(' 'import' QualifiedName StringLiteral? ImportList? ')'
+Use = '(' 'use' QualifiedName StringLiteral? ImportList? ')'
 
 // Declare that this module implements an interface
 // This creates a contract that the module will provide all definitions required by the interface
@@ -82,9 +82,12 @@ Def =
 | DefTable  // Table definition - defines a database table with a schema
 | DefPact   // Pact (multi-step transaction) definition - defines a cross-chain transaction
 
-// Function definition - defines a named function with parameters and body
-// Must have at least one expression in the body
-Defun = '(' 'defun' name:'ident' TypeAnn? '(' Arg* ')' Documentation? Expr* ')'
+// List of arguments, which can be empty '()'
+Args = '(' Arg* ')'
+
+// Function definition - defines a named function with parameters and body.
+// Documentation must come first, and body must have at least one expr.
+Defun = '(' 'defun' name:'ident' TypeAnn? Args Documentation? Expr* ')'
 
 // Constant definition - defines a named constant value
 DefConst = '(' 'defconst' name:'ident' TypeAnn? Documentation? Expr ')'
@@ -92,7 +95,7 @@ DefConst = '(' 'defconst' name:'ident' TypeAnn? Documentation? Expr ')'
 // Capability definition - defines a capability (access control mechanism)
 // Must have at least one expression in the body
 // Can include metadata like @event and @managed
-DefCap = '(' 'defcap' name:'ident' TypeAnn? '(' Arg* ')' Documentation? (CapMeta | Expr)* ')'
+DefCap = '(' 'defcap' name:'ident' TypeAnn? Args Documentation? (CapMeta | Expr)* ')'
 
 // Schema definition - defines a data structure schema (like a record type)
 DefSchema = '(' 'defschema' name:'ident' Documentation? SchemaArg* ')'
@@ -102,7 +105,7 @@ DefTable = '(' 'deftable' name:'ident' ':' '{' schema:ParsedName '}' (DocString 
 
 // Pact definition - defines a multi-step transaction
 // Used for cross-chain transactions and complex multi-stage operations
-DefPact = '(' 'defpact' name:'ident' TypeAnn? '(' Arg* ')' Documentation? PactStep* ')'
+DefPact = '(' 'defpact' name:'ident' TypeAnn? Args Documentation? PactStep* ')'
 
 // Pact steps - individual steps in a multi-step transaction
 // Steps can be executed across different chains and transactions
@@ -122,22 +125,22 @@ IfDef =
 
 // Interface function definition - only signature, no implementation
 // Modules implementing the interface must provide matching implementations
-IfDefun = '(' 'defun' name:'ident' TypeAnn? '(' Arg* ')' Documentation? ')'
+IfDefun = '(' 'defun' name:'ident' TypeAnn? Args Documentation? ')'
 
 // Interface capability definition - only signature, no implementation
 // Modules implementing the interface must provide matching capability definitions
-IfDefCap = '(' 'defcap' name:'ident' TypeAnn? '(' Arg* ')' Documentation? CapMeta* ')'
+IfDefCap = '(' 'defcap' name:'ident' TypeAnn? Args Documentation? CapMeta* ')'
 
 // Interface pact definition - only signature, no implementation
 // Modules implementing the interface must provide matching pact definitions
-IfDefPact = '(' 'defpact' name:'ident' TypeAnn? '(' Arg* ')' Documentation? ')'
+IfDefPact = '(' 'defpact' name:'ident' TypeAnn? Args Documentation? ')'
 
 // Capability metadata - additional information for capabilities
 // Controls how capabilities are managed and emitted as events
 CapMeta =
   '@event' BoolLiteral?
 | '@managed'
-| '@managed' resource:ParsedName defun:'ident'
+| '@managed' resource:ParsedName fn:'ident'
 
 // Arguments - function and other parameters
 // Arg = Function argument with optional type annotation
@@ -150,8 +153,7 @@ Type =
   PrimType                        // Primitive type
 | '[' Type ']'                    // List type
 | 'module' '{' QualifiedName* '}' // Module reference type, comma separated
-| 'object' '{' ParsedTyName '}'   // Schema type for objects
-| 'ident' '{' ParsedTyName '}'    // Schema type for tables
+| 'ident' '{' ParsedTyName '}'    // Schema type for tables, objects ('ident' for object would be 'object')
 | '*'                             // Any type (for lists)
 
 // Primitive types
@@ -180,10 +182,7 @@ Expr =
 | Binding
 
 // Variable reference - refers to a defined name
-Var =
-  BareName       // Bare name (local variable or function)
-| QualifiedName  // Qualified name (from another module)
-| ModRef         // Module reference (e.g., "ns::name")
+Var = ParsedName
 
 // Let binding - local variable definitions
 Let = '(' ('let' | 'let*') '(' Binder* ')' Expr* ')'
@@ -191,7 +190,7 @@ Let = '(' ('let' | 'let*') '(' Binder* ')' Expr* ')'
 Binder = '(' name:'ident' TypeAnn? value:Expr ')'
 
 // Lambda expression - anonymous function
-Lam = '(' 'lambda' '(' Arg* ')' Expr* ')'
+Lam = '(' 'lambda' Args Expr* ')'
 
 // Basic function application
 App = '(' fn:ParsedName args:Expr* ')'
@@ -221,7 +220,7 @@ StringOrSymbol =
   StringLiteral    // Double-quoted string: "example"
 | SymbolLiteral    // Single-quoted symbol: 'example (no terminating quote)
 
-// String literal - double-quoted string
+// String literal - double-quoted string, including strings with escapes
 StringLiteral = 'string'
 
 // Symbol literal - single-quoted identifier without terminating quote
@@ -273,16 +272,15 @@ ParsedTyName =
   BareName       // Simple type name (e.g., "integer")
 | QualifiedName  // Qualified type name (e.g., "user.profile")
 
-// Property expressions - used in formal verification models
-// These form a specialized sub-language for expressing properties and invariants
 PropertyExpr =
-  ParsedName                     // Reference to a name
-| Literal                        // Literal value
-| '(' PropertyExpr* ')'          // Application of property expressions
-| '[' PropertyExpr* ']'          // List of property expressions
-| PropDefProperty                // Property definition (unique to property language)
-| PropLet                        // Let binding in property expressions
-| PropLam                        // Lambda expression in property expressions
+  Var
+| PropLet          // Let binding in property expressions (no let*)
+| PropLam          // Lambda expression in property expressions ('lam' keyword)
+| PropApp          // Application of property expressions
+| PropList         // List of property expressions
+| Literal
+| Object
+| PropDefProperty  // Property definition (unique to property language)
 
 // Let binding in property expressions - uses 'let' keyword (not 'let*')
 // Similar to Let in the main language but specific to property expressions
@@ -293,11 +291,15 @@ PropBinder = '(' name:'ident' value:PropertyExpr ')'
 
 // Lambda expression in property expressions - uses 'lam' keyword (not 'lambda')
 // Similar to Lam in the main language but specific to property expressions
-PropLam = '(' 'lam' '(' Arg* ')' PropertyExpr* ')'
+PropLam = '(' 'lam' Args PropertyExpr* ')'
+
+// Application of property expressions
+PropApp = '(' fn:ParsedName args:PropertyExpr* ')'
+
+// List of property expressions
+PropList = '[' items:PropertyExpr* ']'
 
 // Property definition - defines a named property with optional arguments
-// Example: (defproperty conserves-mass (= (column-delta token-table 'balance) 0.0))
-// Example with args: (defproperty valid-account (account:string) (and (>= (length account) 3) (<= (length account) 256)))
-PropDefProperty = '(' 'defproperty' name:'ident' args:PropArgs? body:PropertyExpr ')'
-
-PropArgs = '(' Arg* ')'
+// Unlike defun, args are entirely optional and no parens are needed; also,
+// the body is a single expression.
+PropDefProperty = '(' 'defproperty' name:'ident' args:Args? body:PropertyExpr ')'
