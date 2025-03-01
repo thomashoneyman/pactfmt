@@ -6,7 +6,6 @@
 
 Program = TopLevel*
 
-// For regular Pact source files
 TopLevel =
   Module      // Module definition with functions, capabilities, etc.
 | Interface   // Interface definition (similar to a module but only signatures)
@@ -192,22 +191,25 @@ Binder = '(' name:'ident' TypeAnn? value:Expr ')'
 // Lambda expression - anonymous function
 Lam = '(' 'lambda' Args Expr* ')'
 
-// Basic function application
+// Basic function application. Function must be a name, because
+// Pact does not allow exprs to return functions.
 App = '(' fn:ParsedName args:Expr* ')'
 
 Binding = '{' BindPair* '}' // Named argument binding form: { "a" := 1, ... }
 
 // Note: In Pact, list elements can be separated by spaces or commas
-List = '[' items:Expr* ']'
+// but not both, and no trailing commas allowed.
+List = '[' items:(Expr ','?)* ']'
 
+// String or symbol keys with expr values, separated by commas
 Object = '{' fields:FieldPair* '}'
-FieldPair = key:StringOrSymbol ':' value:Expr
+FieldPair = key:StringOrSymbol ':' value:Expr ','?
 
 // Binding pair - key-value pair in a binding form
-// The key is a string or symbol, followed by := and an argument (which may have a type annotation)
-BindPair = key:StringOrSymbol ':=' arg:Arg
+// The key is a string or symbol, followed by := and an argument (which may
+// have a type annotation), separated by commas.
+BindPair = key:StringOrSymbol ':=' arg:Arg ','?
 
-// Literals - actual literal values
 Literal =
   IntLiteral       // Integer literal (e.g., 42)
 | DecimalLiteral   // Decimal literal (e.g., 3.14)
@@ -237,34 +239,27 @@ BoolLiteral =
   'true'
 | 'false'
 
-// Names - references to defined entities
-// There are three types of names in Pact:
-// 1. Simple names (single identifier)
-// 2. Qualified names (dot-separated path)
-// 3. Module references (using :: operator)
-
-// A simple name - just a single identifier
-// Example: add
+// A simple name is a single identifier
 BareName = 'ident'
 
-ModQual =
-  BareName                // Simple qualifier (e.g., "module")
-| BareName '.' ModQual    // Nested qualifier (e.g., "namespace.module")
+// A potentially-qualified name, either a terminal or a path part
+DottableName =
+  'ident'
+| 'ident' '.' DottableName
 
 // A qualified name - contains at least one dot
 // In the parser, this is represented as a head and a ModQual
-// Example: my.module.function
-QualifiedName = head:BareName '.' ModQual
+QualifiedName = head:'ident' '.' DottableName
 
 // Module reference - references a name from a specific module using ::
-// Example: my.module::function
-ModRef = module:ModQual '::' name:'ident'
+// Not used for static references, so this uses 'ident' instead of 'Dottable'
+ModRef = module:'ident' '::' name:'ident'
 
 // Name reference - used in most contexts where a name is needed
 ParsedName =
   BareName       // Simple name (e.g., "add")
 | QualifiedName  // Qualified name (e.g., "math.add")
-| ModRef         // Module reference (e.g., "my.mod::name")
+| ModRef         // Module reference (e.g., "module::name")
 
 // Type name reference - used specifically for type references
 // Cannot use module references for types
