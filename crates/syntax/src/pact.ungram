@@ -1,0 +1,300 @@
+// This grammar specifies the structure of Pact 5's concrete syntax tree. Note: This is
+// not a parsing grammar but describes the structure of the syntax tree. This covers both
+// regular Pact source files and REPL files. REPL-specific commands like env-data,
+// env-keys, begin-tx, etc. are syntactically just function applications and are covered
+// by the Expr construct.
+
+Program = TopLevel*
+
+TopLevel =
+  Module      // Module definition with functions, capabilities, etc.
+| Interface   // Interface definition (similar to a module but only signatures)
+| Expr        // Top-level expression
+| Use         // Import statement (brings definitions from other modules into scope)
+
+// Module definition - the primary organizational unit in Pact
+// Contains definitions, imports, and other declarations
+Module = '(' 'module' name:'ident' gov:Governance Documentation? (ExternalDecl | Def)* ')'
+
+// Interface definition - defines a contract that modules can implement
+// Interfaces contain function signatures, constants, and schemas but no implementations
+Interface = '(' 'interface' name:'ident' Documentation? (Use | IfDef)* ')'
+
+// Governance models - specifies how a module is governed
+Governance =
+  StringOrSymbol  // Keyset-based governance (keyset name as string)
+| 'ident'         // Capability-based governance (capability name)
+
+// Documentation - either a docstring OR annotations, but not both
+// Provides information about the purpose and usage of definitions
+Documentation =
+  DocString
+| DefAnns
+
+// A simple docstring (a bare string at the beginning of a definition)
+DocString = StringLiteral
+
+// Definition annotations - can have @doc, @model, or both
+DefAnns =
+  Doc Model?
+| Model Doc?
+
+// Documentation annotation - @doc annotation
+Doc = '@doc' StringLiteral
+
+// Model annotation for formal verification
+// Contains a list of property expressions enclosed in square brackets
+// Used to specify invariants and properties for formal verification
+Model = '@model' PropList
+
+// External declarations - declarations that reference things outside the module
+// These establish relationships with other modules and interfaces
+ExternalDecl =
+  Use
+| Implements
+| Bless
+
+// Import declaration - brings definitions from other modules into scope
+// The string is an optional hash for version pinning
+// The ImportList is an optional list of specific names to import
+Use = '(' 'use' QualifiedName StringLiteral? ImportList? ')'
+
+// Declare that this module implements an interface
+// This creates a contract that the module will provide all definitions required by the interface
+Implements = '(' 'implements' QualifiedName ')'
+
+// Bless a specific hash
+// Used for module versioning and upgrade paths
+Bless = '(' 'bless' StringLiteral ')'
+
+// List of specific names to import (when present, must have at least one)
+// Allows selective importing of definitions from a module
+ImportList = '[' 'ident'* ']'
+
+// Definitions - various types of definitions that can appear in a module
+// These are the primary building blocks of Pact modules
+Def =
+  Defun     // Function definition - defines a named function with parameters and body
+| DefConst  // Constant definition - defines a named constant value
+| DefCap    // Capability definition - defines an access control mechanism
+| DefSchema // Schema definition - defines a new type
+| DefTable  // Table definition - defines a database table with a schema
+| DefPact   // Pact (multi-step transaction) definition - defines a cross-chain transaction
+
+// List of arguments, which can be empty '()'
+Args = '(' Arg* ')'
+
+// Function definition - defines a named function with parameters and body.
+// Documentation must come first, and body must have at least one expr.
+Defun = '(' 'defun' name:'ident' TypeAnn? Args Documentation? Expr* ')'
+
+// Constant definition - defines a named constant value
+DefConst = '(' 'defconst' name:'ident' TypeAnn? Documentation? Expr ')'
+
+// Capability definition - defines a capability (access control mechanism)
+// Must have at least one expression in the body
+// Can include metadata like @event and @managed
+DefCap = '(' 'defcap' name:'ident' TypeAnn? Args Documentation? (CapMeta | Expr)* ')'
+
+// Schema definition - defines a data structure schema (like a record type)
+DefSchema = '(' 'defschema' name:'ident' Documentation? SchemaArg* ')'
+
+// Table definition - defines a database table with a schema
+DefTable = '(' 'deftable' name:'ident' ':' '{' schema:ParsedName '}' (DocString | Doc)? ')'
+
+// Pact definition - defines a multi-step transaction
+// Used for cross-chain transactions and complex multi-stage operations
+DefPact = '(' 'defpact' name:'ident' TypeAnn? Args Documentation? PactStep* ')'
+
+// Pact steps - individual steps in a multi-step transaction
+// Steps can be executed across different chains and transactions
+PactStep =
+  '(' 'step' entity:ParsedName? body:Expr Model? ')'
+| '(' 'step-with-rollback' entity:ParsedName? body:Expr rollback:Expr Model? ')'
+| '(' 'resume' binding:Binding body:Expr* ')'
+
+// Interface definitions - definitions that can appear in an interface
+// These provide signatures without implementations
+IfDef =
+  IfDefun
+| DefConst
+| IfDefCap
+| DefSchema
+| IfDefPact
+
+// Interface function definition - only signature, no implementation
+// Modules implementing the interface must provide matching implementations
+IfDefun = '(' 'defun' name:'ident' TypeAnn? Args Documentation? ')'
+
+// Interface capability definition - only signature, no implementation
+// Modules implementing the interface must provide matching capability definitions
+IfDefCap = '(' 'defcap' name:'ident' TypeAnn? Args Documentation? CapMeta* ')'
+
+// Interface pact definition - only signature, no implementation
+// Modules implementing the interface must provide matching pact definitions
+IfDefPact = '(' 'defpact' name:'ident' TypeAnn? Args Documentation? ')'
+
+// Capability metadata - additional information for capabilities
+// Controls how capabilities are managed and emitted as events
+CapMeta =
+  '@event' BoolLiteral?
+| '@managed'
+| '@managed' resource:ParsedName fn:'ident'
+
+// Arguments - function and other parameters
+// Arg = Function argument with optional type annotation
+Arg = name:'ident' TypeAnn?
+SchemaArg = name:'ident' TypeAnn  // Schema field (always has a type)
+
+TypeAnn = ':' Type  // Type annotation
+
+Type =
+  PrimType                        // Primitive type
+| '[' Type ']'                    // List type
+| 'module' '{' QualifiedName* '}' // Module reference type, comma separated
+| 'ident' '{' ParsedTyName '}'    // Schema type for tables, objects ('ident' for object would be 'object')
+| '*'                             // Any type (for lists)
+
+// Primitive types
+PrimType =
+  'integer'
+| 'decimal'
+| 'bool'
+| 'string'
+| 'time'
+| 'unit'
+| 'guard'
+| 'list'
+| 'keyset'
+| 'object'
+| 'table'
+
+
+Expr =
+  Var
+| Let
+| Lam
+| App
+| List
+| Literal
+| Object
+| Binding
+
+// Variable reference - refers to a defined name
+Var = ParsedName
+
+// Let binding - local variable definitions
+Let = '(' ('let' | 'let*') '(' Binder* ')' Expr* ')'
+
+Binder = '(' name:'ident' TypeAnn? value:Expr ')'
+
+// Lambda expression - anonymous function
+Lam = '(' 'lambda' Args Expr* ')'
+
+// Basic function application. Function must be a name, because
+// Pact does not allow exprs to return functions.
+App = '(' fn:ParsedName args:Expr* ')'
+
+Binding = '{' BindPair* '}' // Named argument binding form: { "a" := 1, ... }
+
+// Note: In Pact, list elements can be separated by spaces or commas
+// but not both, and no trailing commas allowed.
+List = '[' items:(Expr ','?)* ']'
+
+// String or symbol keys with expr values, separated by commas
+Object = '{' fields:FieldPair* '}'
+FieldPair = key:StringOrSymbol ':' value:Expr ','?
+
+// Binding pair - key-value pair in a binding form
+// The key is a string or symbol, followed by := and an argument (which may
+// have a type annotation), separated by commas.
+BindPair = key:StringOrSymbol ':=' arg:Arg ','?
+
+Literal =
+  IntLiteral       // Integer literal (e.g., 42)
+| DecimalLiteral   // Decimal literal (e.g., 3.14)
+| StringOrSymbol   // String or symbol literal
+| BoolLiteral      // Boolean literal (true/false)
+| '(' ')'          // Unit literal (empty value)
+
+// String representations in Pact
+StringOrSymbol =
+  StringLiteral    // Double-quoted string: "example"
+| SymbolLiteral    // Single-quoted symbol: 'example (no terminating quote)
+
+// String literal - double-quoted string, including strings with escapes
+StringLiteral = 'string'
+
+// Symbol literal - single-quoted identifier without terminating quote
+SymbolLiteral = 'tick'
+
+// Integer literal
+IntLiteral = 'int_number'
+
+// Decimal literal
+DecimalLiteral = 'decimal_number'
+
+// Boolean literals
+BoolLiteral =
+  'true'
+| 'false'
+
+// A simple name is a single identifier
+BareName = 'ident'
+
+// A potentially-qualified name, either a terminal or a path part
+DottableName =
+  'ident'
+| 'ident' '.' DottableName
+
+// A qualified name - contains at least one dot
+// In the parser, this is represented as a head and a ModQual
+QualifiedName = head:'ident' '.' DottableName
+
+// Module reference - references a name from a specific module using ::
+// Not used for static references, so this uses 'ident' instead of 'Dottable'
+ModRef = module:'ident' '::' name:'ident'
+
+// Name reference - used in most contexts where a name is needed
+ParsedName =
+  BareName       // Simple name (e.g., "add")
+| QualifiedName  // Qualified name (e.g., "math.add")
+| ModRef         // Module reference (e.g., "module::name")
+
+// Type name reference - used specifically for type references
+// Cannot use module references for types
+ParsedTyName =
+  BareName       // Simple type name (e.g., "integer")
+| QualifiedName  // Qualified type name (e.g., "user.profile")
+
+PropertyExpr =
+  Var
+| PropLet          // Let binding in property expressions (no let*)
+| PropLam          // Lambda expression in property expressions ('lam' keyword)
+| PropApp          // Application of property expressions
+| PropList         // List of property expressions
+| Literal
+| Object
+| PropDefProperty  // Property definition (unique to property language)
+
+// Let binding in property expressions - uses 'let' keyword (not 'let*')
+// Similar to Let in the main language but specific to property expressions
+PropLet = '(' 'let' '(' PropBinder* ')' PropertyExpr* ')'
+
+// Binder for property let expressions
+PropBinder = '(' name:'ident' value:PropertyExpr ')'
+
+// Lambda expression in property expressions - uses 'lam' keyword (not 'lambda')
+// Similar to Lam in the main language but specific to property expressions
+PropLam = '(' 'lam' Args PropertyExpr* ')'
+
+// Application of property expressions
+PropApp = '(' fn:ParsedName args:PropertyExpr* ')'
+
+// List of property expressions
+PropList = '[' items:PropertyExpr* ']'
+
+// Property definition - defines a named property with optional arguments
+// Unlike defun, args are entirely optional and no parens are needed; also,
+// the body is a single expression.
+PropDefProperty = '(' 'defproperty' name:'ident' args:Args? body:PropertyExpr ')'
