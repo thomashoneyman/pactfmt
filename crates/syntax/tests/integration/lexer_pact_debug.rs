@@ -1,9 +1,9 @@
 use std::io::Write;
-use std::process::{Command, Stdio};
 use std::path::PathBuf;
+use std::process::{Command, Stdio};
 
-use syntax::types::{Token, SourceRange};
-use syntax::lexer::api::tokenize;
+use syntax::lexer::tokenize;
+use syntax::types::{SourceRange, Token};
 
 #[test]
 fn test_flattened_snapshots() {
@@ -89,7 +89,9 @@ fn test_flattened_snapshots() {
         drop(stdin); // Close stdin
 
         // Collect output
-        let output = pact_cmd.wait_with_output().expect("Failed to wait for Pact REPL");
+        let output = pact_cmd
+            .wait_with_output()
+            .expect("Failed to wait for Pact REPL");
         let stdout = String::from_utf8_lossy(&output.stdout).to_string();
 
         // Print full REPL output for debugging
@@ -102,7 +104,7 @@ fn test_flattened_snapshots() {
             Some(tokens) => {
                 debug_messages.push(format!("Found Pact tokens: {:?}", tokens));
                 tokens
-            },
+            }
             None => {
                 panic!("❌ FAILURE - Could not extract tokens from Pact output");
             }
@@ -114,7 +116,8 @@ fn test_flattened_snapshots() {
             successful_files += 1;
         } else {
             // Try comparing with comma filtering for Pact's idiosyncrasies
-            let (tokens_match, missing_from_ours, missing_from_pact) = lenient_compare_tokens(&our_formatted, &pact_tokens);
+            let (tokens_match, missing_from_ours, missing_from_pact) =
+                lenient_compare_tokens(&our_formatted, &pact_tokens);
 
             if tokens_match {
                 println!("✅ SUCCESS - {}", file.display());
@@ -150,18 +153,17 @@ fn test_flattened_snapshots() {
     // NOTE: For development, we can comment out this assertion to let the test pass
     // while we see the comparison results
     assert_eq!(
-        successful_files, total_files,
+        successful_files,
+        total_files,
         "{} out of {} files had tokenization mismatches",
-        total_files - successful_files, total_files
+        total_files - successful_files,
+        total_files
     );
 }
 
 /// Check the installed Pact version
 fn check_pact_version() -> Option<String> {
-    let output = Command::new("pact")
-        .arg("--version")
-        .output()
-        .ok()?;
+    let output = Command::new("pact").arg("--version").output().ok()?;
 
     if output.status.success() {
         Some(String::from_utf8_lossy(&output.stdout).to_string())
@@ -172,7 +174,8 @@ fn check_pact_version() -> Option<String> {
 
 /// Format tokens for comparison with Pact output
 fn format_tokens_for_comparison(tokens: &[(Token, SourceRange)]) -> Vec<String> {
-    tokens.iter()
+    tokens
+        .iter()
         .map(|(token, _)| match token {
             Token::Ident(s) => format!("ident<{}>", s),
             Token::String(s) => format!("\"{}\"", s),
@@ -291,11 +294,11 @@ fn parse_pact_token_array(array_content: &str) -> Vec<String> {
                     tokens.push(current_token.trim().to_string());
                     current_token = String::new();
                 }
-            },
+            }
             '<' => {
                 in_ident = true;
                 current_token.push(c);
-            },
+            }
             '>' => {
                 current_token.push(c);
                 if in_ident {
@@ -303,7 +306,7 @@ fn parse_pact_token_array(array_content: &str) -> Vec<String> {
                     // Don't add the token yet, as there might be more characters
                     // like in "ident<>>"
                 }
-            },
+            }
             ',' => {
                 if in_string || in_ident {
                     current_token.push(c);
@@ -314,19 +317,19 @@ fn parse_pact_token_array(array_content: &str) -> Vec<String> {
                         current_token = String::new();
                     }
                 }
-            },
+            }
             '\n' => {
                 // Ignore newlines unless in a string
                 if in_string {
                     current_token.push(c);
                 }
-            },
+            }
             ' ' | '\t' => {
                 // Ignore whitespace at the beginning of a token or between tokens
                 if in_string || in_ident || !current_token.is_empty() {
                     current_token.push(c);
                 }
-            },
+            }
             // Individual tokens that should be parsed separately
             '(' | ')' | '[' | ']' | '{' | '}' => {
                 if in_string || in_ident {
@@ -340,12 +343,12 @@ fn parse_pact_token_array(array_content: &str) -> Vec<String> {
                     // Add the special character as its own token
                     tokens.push(c.to_string());
                 }
-            },
+            }
             ':' | '=' | '.' => {
                 // These characters could be part of a larger token
                 // like :=, >=, etc.
                 current_token.push(c);
-            },
+            }
             _ => {
                 current_token.push(c);
             }
@@ -358,7 +361,8 @@ fn parse_pact_token_array(array_content: &str) -> Vec<String> {
     }
 
     // Process tokens to properly handle whitespace
-    tokens.iter()
+    tokens
+        .iter()
         .map(|token| {
             if token.starts_with("''") {
                 // Convert ''gov to 'gov
@@ -376,7 +380,10 @@ fn parse_pact_token_array(array_content: &str) -> Vec<String> {
 fn display_token_diff(our_tokens: &[String], pact_tokens: &[String]) {
     let max_len = our_tokens.len().max(pact_tokens.len());
 
-    println!("{:<4} | {:<30} | {:<30} | {}", "IDX", "OUR TOKEN", "PACT TOKEN", "MATCH");
+    println!(
+        "{:<4} | {:<30} | {:<30} | {}",
+        "IDX", "OUR TOKEN", "PACT TOKEN", "MATCH"
+    );
     println!("{:-<4}-|-{:-<30}-|-{:-<30}-|-{:-<5}", "", "", "", "");
 
     for i in 0..max_len {
@@ -401,20 +408,24 @@ fn truncate_str(s: &str, max_len: usize) -> String {
     if s.len() <= max_len {
         s.to_string()
     } else {
-        format!("{}...", &s[0..max_len-3])
+        format!("{}...", &s[0..max_len - 3])
     }
 }
 
 /// Filter out comma tokens from a token stream (Pact lexer ignores commas)
 fn filter_commas(tokens: &[String]) -> Vec<String> {
-    tokens.iter()
+    tokens
+        .iter()
         .filter(|&token| token != ",")
         .cloned()
         .collect()
 }
 
 /// Compare tokens while accounting for known differences between our lexer and Pact's
-fn lenient_compare_tokens(our_tokens: &[String], pact_tokens: &[String]) -> (bool, Vec<String>, Vec<String>) {
+fn lenient_compare_tokens(
+    our_tokens: &[String],
+    pact_tokens: &[String],
+) -> (bool, Vec<String>, Vec<String>) {
     // Pact does not retain commas
     let our_filtered = filter_commas(our_tokens);
 

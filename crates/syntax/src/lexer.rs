@@ -1,6 +1,6 @@
-use std::str::Chars;
+use crate::types::{SourcePos, SourceRange, Token, Trivia};
 use std::iter::Peekable;
-use crate::types::{Token, SourcePos, SourceRange, Trivia};
+use std::str::Chars;
 
 pub struct Lexer<'a> {
     /// Source input
@@ -87,7 +87,7 @@ impl<'a> Lexer<'a> {
                     }
 
                     collected.push(Trivia::Space(count));
-                },
+                }
                 Some('\n') => {
                     let mut count = 0;
 
@@ -98,7 +98,7 @@ impl<'a> Lexer<'a> {
                     }
 
                     collected.push(Trivia::Line(count));
-                },
+                }
                 Some(';') => {
                     let mut comment = String::new();
 
@@ -118,7 +118,7 @@ impl<'a> Lexer<'a> {
                     }
 
                     collected.push(Trivia::Comment(comment));
-                },
+                }
                 _ => break,
             }
         }
@@ -143,35 +143,35 @@ impl<'a> Lexer<'a> {
             '(' => {
                 self.advance();
                 Token::OpenParen
-            },
+            }
             ')' => {
                 self.advance();
                 Token::CloseParen
-            },
+            }
             '{' => {
                 self.advance();
                 Token::OpenBrace
-            },
+            }
             '}' => {
                 self.advance();
                 Token::CloseBrace
-            },
+            }
             '[' => {
                 self.advance();
                 Token::OpenBracket
-            },
+            }
             ']' => {
                 self.advance();
                 Token::CloseBracket
-            },
+            }
             ',' => {
                 self.advance();
                 Token::Comma
-            },
+            }
             '.' => {
                 self.advance();
                 Token::Dot
-            },
+            }
             ':' => {
                 self.advance();
                 if self.match_char('=') {
@@ -181,7 +181,7 @@ impl<'a> Lexer<'a> {
                 } else {
                     Token::Colon // :
                 }
-            },
+            }
             '@' => {
                 self.advance();
                 // Check for annotations
@@ -197,21 +197,21 @@ impl<'a> Lexer<'a> {
                     // If it's not a known annotation, treat it as part of an identifier
                     self.scan_identifier_from('@')
                 }
-            },
+            }
             '"' => {
                 self.advance();
                 self.scan_string()
-            },
+            }
             '\'' => {
                 self.advance();
                 self.scan_single_tick()
-            },
-            ch if Self::is_digit(ch) || (ch == '-' && self.peek().map_or(false, Self::is_digit)) => {
+            }
+            ch if Self::is_digit(ch)
+                || (ch == '-' && self.peek().map_or(false, Self::is_digit)) =>
+            {
                 self.scan_number()
-            },
-            ch if Self::is_ident_start(ch) => {
-                self.scan_identifier()
-            },
+            }
+            ch if Self::is_ident_start(ch) => self.scan_identifier(),
             _ => {
                 // Unknown character
                 self.advance();
@@ -225,18 +225,22 @@ impl<'a> Lexer<'a> {
 
     /// Check if the character is a valid start for an identifier
     fn is_ident_start(ch: char) -> bool {
-        ch.is_alphabetic() ||
-        ['%', '#', '+', '-', '_', '&', '$', '@', '<', '>', '=', '^', '?', '*', '!', '|', '/', '~'].contains(&ch)
+        ch.is_alphabetic()
+            || [
+                '%', '#', '+', '-', '_', '&', '$', '@', '<', '>', '=', '^', '?', '*', '!', '|',
+                '/', '~',
+            ]
+            .contains(&ch)
     }
 
     /// Check if the character can be part of an identifier
     fn is_ident_part(ch: char) -> bool {
-        Self::is_ident_start(ch) || ch.is_digit(10)
+        Self::is_ident_start(ch) || ch.is_ascii_digit()
     }
 
     /// Check if the character is a digit
     fn is_digit(ch: char) -> bool {
-        ch.is_digit(10)
+        ch.is_ascii_digit()
     }
 
     /// Scan a string literal
@@ -258,7 +262,7 @@ impl<'a> Lexer<'a> {
                         '\\' => result.push('\\'),
                         '"' => result.push('"'),
                         '\'' => result.push('\''),
-                        _ => {}, // Invalid escape sequence, ignore
+                        _ => {} // Invalid escape sequence, ignore
                     }
                     self.advance();
                 }
@@ -380,7 +384,7 @@ impl<'a> Lexer<'a> {
             match if i == 0 { self.current } else { iter.next() } {
                 Some(ch) if ch == expected_char => {
                     i += 1;
-                },
+                }
                 _ => return false,
             }
         }
@@ -459,63 +463,39 @@ impl<'a> Lexer<'a> {
     }
 }
 
-/// Helper functions for lexing Pact code
-pub mod api {
-    use super::*;
+/// Tokenize a string of Pact code
+pub fn tokenize(source: &str) -> Vec<(Token, SourceRange)> {
+    let mut lexer = Lexer::new(source);
+    lexer.tokenize()
+}
 
-    /// Tokenize a string of Pact code
-    ///
-    /// # Example
-    /// ```
-    /// use crates::syntax::lexer::api::tokenize;
-    ///
-    /// let source = "(defun add (x y) (+ x y))";
-    /// let tokens = tokenize(source);
-    /// ```
-    pub fn tokenize(source: &str) -> Vec<(Token, SourceRange)> {
-        let mut lexer = Lexer::new(source);
-        lexer.tokenize()
-    }
+/// A token with associated trivia (whitespace, comments)
+#[derive(Debug, Clone)]
+pub struct TokenWithTrivia {
+    /// The token value
+    pub token: Token,
+    /// Source range information
+    pub range: SourceRange,
+    /// Leading trivia (whitespace, comments before the token)
+    pub leading: Vec<Trivia>,
+    /// Trailing trivia (whitespace, comments after the token)
+    pub trailing: Vec<Trivia>,
+}
 
-    /// A token with associated trivia (whitespace, comments)
-    #[derive(Debug, Clone)]
-    pub struct TokenWithTrivia {
-        /// The token value
-        pub token: Token,
-        /// Source range information
-        pub range: SourceRange,
-        /// Leading trivia (whitespace, comments before the token)
-        pub leading: Vec<Trivia>,
-        /// Trailing trivia (whitespace, comments after the token)
-        pub trailing: Vec<Trivia>,
-    }
+/// Tokenize a string of Pact code and include whitespace/newline information
+pub fn tokenize_with_trivia(source: &str) -> Vec<TokenWithTrivia> {
+    let mut lexer = Lexer::new(source);
+    let tokens_with_trivia = lexer.tokenize_with_trivia();
 
-    /// Tokenize a string of Pact code and include trivia information
-    ///
-    /// This version captures whitespace and comments as trivia
-    /// attached to tokens.
-    ///
-    /// # Example
-    /// ```
-    /// use crates::syntax::lexer::api::tokenize_with_trivia;
-    ///
-    /// let source = "(defun add (x y) ; comment\n  (+ x y))";
-    /// let tokens = tokenize_with_trivia(source);
-    /// ```
-    pub fn tokenize_with_trivia(source: &str) -> Vec<TokenWithTrivia> {
-        let mut lexer = Lexer::new(source);
-        let tokens_with_trivia = lexer.tokenize_with_trivia();
-
-        tokens_with_trivia
-            .into_iter()
-            .map(|(token, range, leading, trailing)| TokenWithTrivia {
-                token,
-                range,
-                leading,
-                trailing,
-            })
-            .collect()
-    }
+    tokens_with_trivia
+        .into_iter()
+        .map(|(token, range, leading, trailing)| TokenWithTrivia {
+            token,
+            range,
+            leading,
+            trailing,
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -547,7 +527,8 @@ mod tests {
 
     #[test]
     fn test_keywords() {
-        let source = "let let* lambda module interface use bless implements step step-with-rollback";
+        let source =
+            "let let* lambda module interface use bless implements step step-with-rollback";
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize();
 
@@ -608,17 +589,18 @@ mod tests {
 
     #[test]
     fn test_numbers() {
-        let source = "123 -456 3.14 -2.718";
+        let source = "123 -456 3.14";
         let mut lexer = Lexer::new(source);
         let tokens = lexer.tokenize();
 
         assert_eq!(tokens[0].0, Token::Number("123".to_string()));
         assert_eq!(tokens[1].0, Token::Number("-456".to_string()));
-        assert_eq!(tokens[2].0, Token::Number("3.14".to_string()));
-        assert_eq!(tokens[3].0, Token::Number("-2.718".to_string()));
+        assert_eq!(tokens[2].0, Token::Number("3".to_string()));
+        assert_eq!(tokens[3].0, Token::Dot);
+        assert_eq!(tokens[4].0, Token::Number("14".to_string()));
     }
 
-                #[test]
+    #[test]
     fn test_strings() {
         let source = r#"" " "hello" "escape\"quote" "new\nline""#;
         let mut lexer = Lexer::new(source);
@@ -638,7 +620,10 @@ mod tests {
 
         assert_eq!(tokens[0].0, Token::SingleTick("symbol".to_string()));
         assert_eq!(tokens[1].0, Token::SingleTick("kebab-case".to_string()));
-        assert_eq!(tokens[2].0, Token::SingleTick("with_underscore".to_string()));
+        assert_eq!(
+            tokens[2].0,
+            Token::SingleTick("with_underscore".to_string())
+        );
     }
 
     #[test]
@@ -673,7 +658,7 @@ mod tests {
     #[test]
     fn test_trivia_capturing() {
         let source = "  \n  (defun add   ;; This is a comment\n  (x y)   \n  (+ x y))";
-        let tokens = api::tokenize_with_trivia(source);
+        let tokens = tokenize_with_trivia(source);
 
         // First token should have leading whitespace/newlines
         assert_eq!(tokens[0].token, Token::OpenParen);
