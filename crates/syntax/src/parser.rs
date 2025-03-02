@@ -4,7 +4,7 @@ use winnow::prelude::*;
 use winnow::token::any;
 
 use crate::cst::*;
-use crate::lexer::Token;
+use crate::lexer_old::Token;
 
 pub fn parse(input: &mut Input) -> PResult<Vec<Toplevel>> {
     repeat(0.., top_level).parse_next(input)
@@ -302,7 +302,7 @@ fn top_level(input: &mut Input) -> PResult<Toplevel> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::lexer::Token;
+    use crate::lexer_old::Token;
     use logos::Logos;
 
     fn lex(input: &str) -> Vec<Token> {
