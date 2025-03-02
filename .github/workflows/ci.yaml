@@ -64,4 +64,4 @@ jobs:
       - name: Add Pact to PATH
         run: echo "PATH=$PATH:$GITHUB_WORKSPACE/.bin" >> $GITHUB_ENV
 
-      - run: cargo test --verbose
+      - run: cargo test --workspace --verbose
