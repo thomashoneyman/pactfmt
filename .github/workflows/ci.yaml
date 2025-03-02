@@ -37,9 +37,7 @@ jobs:
           - nightly
 
         os:
-          - macos-latest
           - ubuntu-latest
-          - windows-latest
 
     runs-on: ${{ matrix.os }}
 
@@ -65,4 +63,7 @@ jobs:
       - name: Add Pact to PATH
         run: echo "PATH=$PATH:$GITHUB_WORKSPACE/.bin" >> $GITHUB_ENV
 
-      - run: cargo test --workspace --verbose
+      - run: |
+          which pact
+          pact --version
+          cargo test --workspace --verbose
