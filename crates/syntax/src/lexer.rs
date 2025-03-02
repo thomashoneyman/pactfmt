@@ -732,6 +732,9 @@ mod tests {
         // Test 3: EOF comments attach to last token
         let tokens = tokenize_with_trivia("foo\n  ; comment");
         let last = &tokens[tokens.len() - 2]; // -2 to skip EOF
-        assert!(last.trailing.iter().any(|t| matches!(t, Trivia::Comment(ref s) if s == "; comment")));
+        assert!(last
+            .trailing
+            .iter()
+            .any(|t| matches!(t, Trivia::Comment(ref s) if s == "; comment")));
     }
 }
