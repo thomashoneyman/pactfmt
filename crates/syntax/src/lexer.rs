@@ -102,12 +102,6 @@ impl<'a> Lexer<'a> {
                 Some(';') => {
                     let mut comment = String::new();
 
-                    // Collect all semicolons at the start of the comment
-                    while let Some(';') = self.current {
-                        comment.push(';');
-                        self.advance();
-                    }
-
                     // Collect until end of line
                     while let Some(ch) = self.current {
                         if ch == '\n' {
@@ -243,28 +237,74 @@ impl<'a> Lexer<'a> {
         ch.is_ascii_digit()
     }
 
-    /// Scan a string literal
+    /// Scan a string literal. Strings can be multi-line using a backslash as a
+    /// line continuation. NOTE: We currently remove the continuation.
     fn scan_string(&mut self) -> Token {
         let mut result = String::new();
 
         while let Some(ch) = self.current {
             if ch == '"' {
-                self.advance(); // consume the closing quote
+                self.advance();
                 break;
             } else if ch == '\\' {
-                self.advance(); // consume the backslash
+                self.advance();
 
-                // Handle escape sequences
-                if let Some(esc) = self.current {
-                    match esc {
-                        'n' => result.push('\n'),
-                        't' => result.push('\t'),
-                        '\\' => result.push('\\'),
-                        '"' => result.push('"'),
-                        '\'' => result.push('\''),
-                        _ => {} // Invalid escape sequence, ignore
+                match self.current {
+                    Some('\n') => {
+                        // This is a line continuation - skip both the backslash and newline
+                        self.advance();
                     }
-                    self.advance();
+                    Some(' ') => {
+                        // Check if this is a line continuation with space between backslashes
+                        self.advance(); // consume the space
+                        if let Some('\\') = self.current {
+                            self.advance(); // consume the second backslash
+                            if let Some('\n') = self.current {
+                                self.advance(); // consume the newline
+                            }
+                        } else {
+                            // Not a line continuation, preserve the backslash and space
+                            result.push('\\');
+                            result.push(' ');
+                        }
+                    }
+                    Some('n') => {
+                        result.push('\n');
+                        self.advance();
+                    }
+                    Some('t') => {
+                        result.push('\t');
+                        self.advance();
+                    }
+                    Some('"') => {
+                        result.push('"');
+                        self.advance();
+                    }
+                    Some('\'') => {
+                        result.push('\'');
+                        self.advance();
+                    }
+                    Some('\\') => {
+                        // Check if this is a double backslash followed by newline
+                        self.advance();
+                        if let Some('\n') = self.current {
+                            // This is a line continuation - skip both backslashes and newline
+                            self.advance();
+                        } else {
+                            // Just a regular escaped backslash
+                            result.push('\\');
+                        }
+                    }
+                    Some(ch) => {
+                        // For any other escaped character, preserve both the backslash and the character
+                        result.push('\\');
+                        result.push(ch);
+                        self.advance();
+                    }
+                    None => {
+                        // Unterminated string
+                        result.push('\\');
+                    }
                 }
             } else {
                 result.push(ch);
@@ -652,7 +692,6 @@ mod tests {
         assert_eq!(tokens[0].0, Token::OpenParen);
         assert_eq!(tokens[1].0, Token::Defun);
         assert_eq!(tokens[2].0, Token::Ident("transfer".to_string()));
-        // More assertions could be added
     }
 
     #[test]
