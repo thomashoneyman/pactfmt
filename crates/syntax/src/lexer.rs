@@ -11,8 +11,6 @@ pub struct Lexer<'a> {
     current: Option<char>,
     /// Whether we've reached the end of the file
     at_eof: bool,
-    /// Collected leading trivia for next token
-    leading_trivia: Vec<Trivia>,
 }
 
 impl<'a> Lexer<'a> {
@@ -26,7 +24,6 @@ impl<'a> Lexer<'a> {
             pos: SourcePos { line: 1, column: 1 },
             current,
             at_eof: false,
-            leading_trivia: Vec::new(),
         }
     }
 
@@ -457,28 +454,52 @@ impl<'a> Lexer<'a> {
 
     /// Tokenize the entire input, keeping track of trivia
     pub fn tokenize_with_trivia(&mut self) -> Vec<(Token, SourceRange, Vec<Trivia>, Vec<Trivia>)> {
-        let mut tokens = Vec::new();
+        let mut tokens: Vec<(Token, SourceRange, Vec<Trivia>, Vec<Trivia>)> = Vec::new();
+        let mut pending_trivia: Vec<Trivia> = Vec::new();
 
         while let Some((token, range, leading)) = self.scan_token() {
-            // Collect any trailing trivia for this token
-            let trailing = if matches!(token, Token::Eof) {
-                // No trailing trivia for EOF
-                Vec::new()
-            } else {
-                // Peek ahead to get the leading trivia of the next token
-                // which is actually trailing trivia for this token
-                let next_leading = self.collect_trivia();
-                let trailing = next_leading;
-                self.leading_trivia = trailing.clone();
-                trailing
-            };
-
             let is_eof = matches!(token, Token::Eof);
-            tokens.push((token, range, leading, trailing));
+
+            // Collect next trivia
+            let next_trivia: Vec<Trivia> = self.collect_trivia();
 
             if is_eof {
+                // At EOF, all remaining trivia is trailing for the last real token
+                if !tokens.is_empty() {
+                    let last_idx = tokens.len() - 1;
+                    // Add any pending trivia first
+                    tokens[last_idx].3.extend(pending_trivia);
+                    // Then add the final trivia
+                    tokens[last_idx].3.extend(next_trivia);
+                }
+                tokens.push((token, range, leading, Vec::new()));
                 break;
             }
+
+            // Split trivia at first newline - everything before is trailing, after is leading
+            let mut trailing: Vec<Trivia> = Vec::new();
+            let mut next_leading: Vec<Trivia> = Vec::new();
+            let mut saw_newline = false;
+
+            for t in next_trivia {
+                if !saw_newline {
+                    if matches!(t, Trivia::Line(_)) {
+                        saw_newline = true;
+                        trailing.push(t);
+                    } else {
+                        trailing.push(t);
+                    }
+                } else {
+                    next_leading.push(t);
+                }
+            }
+
+            // Add any pending trivia to this token's leading trivia
+            let mut final_leading = leading;
+            final_leading.splice(0..0, pending_trivia);
+
+            tokens.push((token, range, final_leading, trailing));
+            pending_trivia = next_leading;
         }
 
         tokens
@@ -693,34 +714,24 @@ mod tests {
     }
 
     #[test]
-    fn test_trivia_capturing() {
-        let source = "  \n  (defun add   ;; This is a comment\n  (x y)   \n  (+ x y))";
-        let tokens = tokenize_with_trivia(source);
+    fn test_trivia() {
+        // Test 1: Inline comments are trailing
+        let tokens = tokenize_with_trivia("foo ; comment\nbar");
+        assert_eq!(tokens[0].trailing.len(), 3); // space + comment + newline
+        assert!(matches!(tokens[0].trailing[0], Trivia::Space(1)));
+        assert!(matches!(tokens[0].trailing[1], Trivia::Comment(ref s) if s == "; comment"));
+        assert!(matches!(tokens[0].trailing[2], Trivia::Line(1)));
 
-        // First token should have leading whitespace/newlines
-        assert_eq!(tokens[0].token, Token::OpenParen);
-        assert_eq!(tokens[0].leading.len(), 3); // Space, newline, space trivia
-        assert!(matches!(tokens[0].leading[0], Trivia::Space(2)));
-        assert!(matches!(tokens[0].leading[1], Trivia::Line(1)));
-        assert!(matches!(tokens[0].leading[2], Trivia::Space(2)));
+        // Test 2: After newline, comments become leading
+        let tokens = tokenize_with_trivia("foo\n  ; comment\nbar");
+        assert_eq!(tokens[1].leading.len(), 3); // space + comment + newline
+        assert!(matches!(tokens[1].leading[0], Trivia::Space(2)));
+        assert!(matches!(tokens[1].leading[1], Trivia::Comment(ref s) if s == "; comment"));
+        assert!(matches!(tokens[1].leading[2], Trivia::Line(1)));
 
-        // Check the trailing trivia for OpenParen (which is empty)
-        assert_eq!(tokens[0].trailing.len(), 0);
-
-        // Now test the "add" identifier token
-        assert_eq!(tokens[2].token, Token::Ident("add".to_string()));
-        assert_eq!(tokens[2].trailing.len(), 4); // Space, comment, newline, space
-
-        assert!(matches!(tokens[2].trailing[0], Trivia::Space(3)));
-        assert!(matches!(tokens[2].trailing[1], Trivia::Comment(_)));
-        assert!(matches!(tokens[2].trailing[2], Trivia::Line(1)));
-        assert!(matches!(tokens[2].trailing[3], Trivia::Space(2)));
-
-        if let Trivia::Comment(comment) = &tokens[2].trailing[1] {
-            assert!(comment.contains("This is a comment"));
-            assert!(comment.starts_with(";;"));
-        } else {
-            panic!("Expected a comment trivia");
-        }
+        // Test 3: EOF comments attach to last token
+        let tokens = tokenize_with_trivia("foo\n  ; comment");
+        let last = &tokens[tokens.len() - 2]; // -2 to skip EOF
+        assert!(last.trailing.iter().any(|t| matches!(t, Trivia::Comment(ref s) if s == "; comment")));
     }
 }
