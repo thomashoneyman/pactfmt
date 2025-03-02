@@ -201,7 +201,7 @@ impl<'a> Lexer<'a> {
                 self.scan_single_tick()
             }
             ch if Self::is_digit(ch)
-                || (ch == '-' && self.peek().map_or(false, Self::is_digit)) =>
+                || (ch == '-' && self.peek().is_some_and(Self::is_digit)) =>
             {
                 self.scan_number()
             }

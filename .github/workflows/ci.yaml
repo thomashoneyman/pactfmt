@@ -56,9 +56,10 @@ jobs:
       - name: Install Pact
         run: |
           PACT_VERSION=5.1
-          wget -nv https://github.com/kadena-io/pact/releases/download/v$PACT_VERSION/pact-$PACT_VERSION-linux-x64.tar.gz
+          wget -nv https://github.com/kadena-io/pact-5/releases/download/$PACT_VERSION/pact-$PACT_VERSION-linux-x64.tar.gz
           tar -xzf pact-$PACT_VERSION-linux-x64.tar.gz
           chmod +x pact
+          mkdir -p .bin
           mv pact .bin/
 
       - name: Add Pact to PATH
