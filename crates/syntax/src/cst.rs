@@ -1,4 +1,4 @@
-use crate::lexer::Token;
+use crate::lexer_old::Token;
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Spacing {

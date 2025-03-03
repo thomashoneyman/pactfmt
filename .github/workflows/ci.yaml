@@ -37,9 +37,7 @@ jobs:
           - nightly
 
         os:
-          - macos-latest
           - ubuntu-latest
-          - windows-latest
 
     runs-on: ${{ matrix.os }}
 
@@ -53,4 +51,19 @@ jobs:
       - name: Cache dependencies
         uses: Swatinem/rust-cache@v2
 
-      - run: cargo test --verbose
+      - name: Install Pact
+        run: |
+          PACT_VERSION=5.1
+          wget -nv https://github.com/kadena-io/pact-5/releases/download/$PACT_VERSION/pact-$PACT_VERSION-linux-x64.tar.gz
+          tar -xzf pact-$PACT_VERSION-linux-x64.tar.gz
+          chmod +x pact
+          mkdir -p .bin
+          mv pact .bin/
+
+      - name: Add Pact to PATH
+        run: echo "PATH=$PATH:$GITHUB_WORKSPACE/.bin" >> $GITHUB_ENV
+
+      - run: |
+          which pact
+          pact --version
+          cargo test --workspace --verbose
