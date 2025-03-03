@@ -277,7 +277,7 @@
         )
       )
 
-    (defun details:object{fungible-v2.account-details}
+    (defun details:object
       ( account:string )
       (with-read coin-table account
         { "balance" := bal

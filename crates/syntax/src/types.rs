@@ -1,3 +1,6 @@
+/// CST types, inspired by
+/// https://matklad.github.io/2023/05/21/resilient-ll-parsing-tutorial.html
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct SourcePos {
     pub line: usize,
@@ -17,41 +20,54 @@ pub enum Trivia {
     Line(usize),
 }
 
-/// Token set for the Pact language, aligned with
-/// https://github.com/kadena-io/pact-5/blob/master/pact/Pact/Core/Syntax/Lexer.x
 #[derive(Debug, PartialEq, Clone)]
-pub enum Token {
+pub struct Token {
+    pub kind: TokenKind,
+    pub text: String,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct SourceToken {
+    pub kind: TokenKind,
+    pub text: String,
+    pub range: SourceRange,
+    pub leading: Vec<Trivia>,  // Whitespace/comments before this token
+    pub trailing: Vec<Trivia>, // Whitespace/comments after this token
+}
+
+/// Token kinds for the Pact language lexer
+/// https://github.com/kadena-io/pact-5/blob/master/pact/Pact/Core/Syntax/Lexer.x
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum TokenKind {
     // Keywords
-    Let,
-    LetStar,
-    Lambda,
-    Module,
-    Interface,
-
-    Import, // 'use' keyword
-    Bless,
-    Implements,
-
-    Step,
-    StepWithRollback,
+    LetKeyword,
+    LetStarKeyword,
+    LambdaKeyword,
+    ModuleKeyword,
+    InterfaceKeyword,
+    ImportKeyword, // 'use' keyword
+    BlessKeyword,
+    ImplementsKeyword,
+    StepKeyword,
+    StepWithRollbackKeyword,
 
     // Definition keywords
-    Defun,
-    DefConst,
-    DefCap,
-    DefPact,
-    DefSchema,
-    DefTable,
+    DefunKeyword,
+    DefConstKeyword,
+    DefCapKeyword,
+    DefPactKeyword,
+    DefSchemaKeyword,
+    DefTableKeyword,
 
     // Annotations
-    DocAnn,     // @doc
-    ModelAnn,   // @model
-    EventAnn,   // @event
-    ManagedAnn, // @managed
+    DocAnnKeyword,     // @doc
+    ModelAnnKeyword,   // @model
+    EventAnnKeyword,   // @event
+    ManagedAnnKeyword, // @managed
 
     // Boolean literals
-    True,
-    False,
+    TrueKeyword,
+    FalseKeyword,
 
     // Delimiters
     OpenParen,    // (
@@ -68,11 +84,79 @@ pub enum Token {
     BindAssign, // :=
     DynAcc,     // ::
 
-    Ident(String),
-    Number(String), // used for integers and decimals
-    String(String),
-    SingleTick(String),
+    // Literals and identifiers
+    Ident,
+    Number,
+    StringLit,
+    SingleTick,
 
     // End of file
     Eof,
+
+    // Special token for errors in the lexer
+    Error,
+}
+
+/// Tree kinds for syntax nodes in the Pact CST
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum TreeKind {
+    // Top-level constructs
+    Program,
+    Module,
+    Interface,
+    Import,
+
+    // Definitions
+    FunctionDef,
+    ConstDef,
+    CapabilityDef,
+    PactDef,
+    SchemaDef,
+    TableDef,
+
+    // Parameters and type annotations
+    ParamList,
+    Param,
+    TypeAnnotation,
+
+    // Expressions
+    Let,
+    LetStar,
+    Lambda,
+    FunctionApp,
+    Literal,
+    ListLiteral,
+    ObjectLiteral,
+    Property,
+    BinaryOp,
+
+    // Statements
+    Block,
+    Step,
+    StepWithRollback,
+
+    // References
+    Name,
+    QualifiedName,
+
+    // Annotations
+    DocAnnotation,
+    ModelAnnotation,
+    EventAnnotation,
+    ManagedAnnotation,
+
+    // Error node
+    ErrorTree,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct Tree {
+    pub kind: TreeKind,
+    pub children: Vec<Child>,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum Child {
+    Token(SourceToken),
+    Tree(Tree),
 }

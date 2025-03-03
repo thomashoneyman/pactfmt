@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::process::{Command, Stdio};
 
 use syntax::lexer::tokenize;
-use syntax::types::{SourceRange, Token};
+use syntax::types::{SourceToken, TokenKind};
 
 #[test]
 /// A test that will iterate through the .pact files in the snapshots directory and
@@ -68,7 +68,7 @@ fn test_flattened_snapshots() {
         let mut our_tokens = tokenize(&flattened_content);
 
         // Remove the trailing EOF token from our lexer, which Pact doesn't include
-        if matches!(our_tokens.last().map(|(t, _)| t), Some(Token::Eof)) {
+        if matches!(our_tokens.last().map(|t| t.kind), Some(TokenKind::Eof)) {
             our_tokens.pop();
         };
 
@@ -164,48 +164,49 @@ fn check_pact_version() -> Option<String> {
 }
 
 /// Format tokens for comparison with Pact output
-fn format_tokens_for_comparison(tokens: &[(Token, SourceRange)]) -> Vec<String> {
+fn format_tokens_for_comparison(tokens: &[SourceToken]) -> Vec<String> {
     tokens
         .iter()
-        .map(|(token, _)| match token {
-            Token::Ident(s) => format!("ident<{}>", s),
-            Token::String(s) => format!("\"{}\"", s),
-            Token::Number(n) => format!("number<{}>", n),
-            Token::OpenParen => "(".to_string(),
-            Token::CloseParen => ")".to_string(),
-            Token::OpenBrace => "{".to_string(),
-            Token::CloseBrace => "}".to_string(),
-            Token::OpenBracket => "[".to_string(),
-            Token::CloseBracket => "]".to_string(),
-            Token::Colon => ":".to_string(),
-            Token::BindAssign => ":=".to_string(),
-            Token::Comma => ",".to_string(),
-            Token::Dot => ".".to_string(),
-            Token::DocAnn => "@doc".to_string(),
-            Token::ModelAnn => "@model".to_string(),
-            Token::EventAnn => "@event".to_string(),
-            Token::ManagedAnn => "@managed".to_string(),
-            Token::True => "true".to_string(),
-            Token::False => "false".to_string(),
-            Token::Module => "module".to_string(),
-            Token::DefCap => "defcap".to_string(),
-            Token::Defun => "defun".to_string(),
-            Token::DefSchema => "defschema".to_string(),
-            Token::DefTable => "deftable".to_string(),
-            Token::DefConst => "defconst".to_string(),
-            Token::Lambda => "lambda".to_string(),
-            Token::Let => "let".to_string(),
-            Token::LetStar => "let*".to_string(),
-            Token::SingleTick(s) => format!("'{}", s),
-            Token::Eof => "eof".to_string(),
-            Token::Bless => "bless".to_string(),
-            Token::Implements => "implements".to_string(),
-            Token::Import => "use".to_string(),
-            Token::Step => "step".to_string(),
-            Token::StepWithRollback => "step-with-rollback".to_string(),
-            Token::Interface => "interface".to_string(),
-            Token::DefPact => "defpact".to_string(),
-            Token::DynAcc => "::".to_string(),
+        .map(|token| match token.kind {
+            TokenKind::Ident => format!("ident<{}>", token.text),
+            TokenKind::StringLit => format!("\"{}\"", token.text.trim_matches('"')),
+            TokenKind::Number => format!("number<{}>", token.text),
+            TokenKind::OpenParen => "(".to_string(),
+            TokenKind::CloseParen => ")".to_string(),
+            TokenKind::OpenBrace => "{".to_string(),
+            TokenKind::CloseBrace => "}".to_string(),
+            TokenKind::OpenBracket => "[".to_string(),
+            TokenKind::CloseBracket => "]".to_string(),
+            TokenKind::Colon => ":".to_string(),
+            TokenKind::BindAssign => ":=".to_string(),
+            TokenKind::Comma => ",".to_string(),
+            TokenKind::Dot => ".".to_string(),
+            TokenKind::DocAnnKeyword => "@doc".to_string(),
+            TokenKind::ModelAnnKeyword => "@model".to_string(),
+            TokenKind::EventAnnKeyword => "@event".to_string(),
+            TokenKind::ManagedAnnKeyword => "@managed".to_string(),
+            TokenKind::TrueKeyword => "true".to_string(),
+            TokenKind::FalseKeyword => "false".to_string(),
+            TokenKind::ModuleKeyword => "module".to_string(),
+            TokenKind::DefCapKeyword => "defcap".to_string(),
+            TokenKind::DefunKeyword => "defun".to_string(),
+            TokenKind::DefSchemaKeyword => "defschema".to_string(),
+            TokenKind::DefTableKeyword => "deftable".to_string(),
+            TokenKind::DefConstKeyword => "defconst".to_string(),
+            TokenKind::LambdaKeyword => "lambda".to_string(),
+            TokenKind::LetKeyword => "let".to_string(),
+            TokenKind::LetStarKeyword => "let*".to_string(),
+            TokenKind::SingleTick => format!("'{}", token.text.trim_start_matches('\'')),
+            TokenKind::Eof => "eof".to_string(),
+            TokenKind::BlessKeyword => "bless".to_string(),
+            TokenKind::ImplementsKeyword => "implements".to_string(),
+            TokenKind::ImportKeyword => "use".to_string(),
+            TokenKind::StepKeyword => "step".to_string(),
+            TokenKind::StepWithRollbackKeyword => "step-with-rollback".to_string(),
+            TokenKind::InterfaceKeyword => "interface".to_string(),
+            TokenKind::DefPactKeyword => "defpact".to_string(),
+            TokenKind::DynAcc => "::".to_string(),
+            TokenKind::Error => format!("error<{}>", token.text),
         })
         .collect()
 }
