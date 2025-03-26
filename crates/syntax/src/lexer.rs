@@ -444,20 +444,32 @@ impl<'a> Lexer<'a> {
             // Collect trivia after this token
             let next_trivia = self.collect_trivia();
 
-            // Split trivia at first newline
+            // Split trivia appropriately:
+            // - Comments go in trailing trivia of the current token
+            // - Newlines and whitespace after the first newline go in leading trivia of the next token
             let mut trailing: Vec<Trivia> = Vec::new();
             let mut next_leading: Vec<Trivia> = Vec::new();
             let mut saw_newline = false;
 
             for t in next_trivia {
                 if !saw_newline {
-                    if matches!(t, Trivia::Line(_)) {
-                        saw_newline = true;
-                        trailing.push(t);
-                    } else {
-                        trailing.push(t);
+                    match t {
+                        // Only comments should go in trailing trivia when not at EOF
+                        Trivia::Comment(_) => {
+                            trailing.push(t);
+                        }
+                        // Newlines always go to leading trivia of next token
+                        Trivia::Line(_) => {
+                            saw_newline = true;
+                            next_leading.push(t);
+                        }
+                        // Spaces before newline go to trailing
+                        Trivia::Space(_) => {
+                            trailing.push(t);
+                        }
                     }
                 } else {
+                    // After newline, everything goes to leading trivia of next token
                     next_leading.push(t);
                 }
             }
@@ -497,7 +509,7 @@ mod tests {
 
     #[test]
     fn test_basic_tokens() {
-        let source = "(defun add (x y) (+ x y))";
+        let source = "(defun add (x y) (+ x y)) ; comment";
         let tokens = tokenize(source);
 
         // Check token types
@@ -514,6 +526,7 @@ mod tests {
         assert_eq!(tokens[10].kind, TokenKind::Ident);
         assert_eq!(tokens[11].kind, TokenKind::CloseParen);
         assert_eq!(tokens[12].kind, TokenKind::CloseParen);
+        assert_eq!(tokens[12].trailing, vec![Trivia::Space(1), Trivia::Comment("; comment".to_string())]);
         assert_eq!(tokens[13].kind, TokenKind::Eof);
 
         // Check text
@@ -589,4 +602,6 @@ mod tests {
         assert_eq!(tokens[2].text, "£");
         assert_eq!(tokens[4].text, "€");
     }
+
+
 }

@@ -1,5 +1,0 @@
----
-source: crates/format/tests/tests.rs
-expression: doc.pretty(40)
----
-(defun square (x) (+ [x] [x]))

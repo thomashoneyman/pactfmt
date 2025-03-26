@@ -1,51 +1,80 @@
 use syntax::types::{Child, Tree, TreeKind};
 
-use crate::format_tree::{SpecialForm, Wrapped, FST};
+use crate::format_tree::{ListItem, SpecialForm, Wrapped, FST};
 
-pub fn lower_program(tree: Tree) -> Vec<FST> {
-    let mut fsts = vec![];
-    // Naively assumes the tree is a program.
-    for child in tree.children {
-        fsts.push(lower_child(child));
-    }
-    fsts
+pub fn lower_file(tree: Tree) -> Vec<FST> {
+    tree.children.into_iter().map(lower_child).collect()
 }
 
 pub fn lower_child(child: Child) -> FST {
     match child {
         Child::Token(token) => FST::Literal(token),
         Child::Tree(tree) => match tree.kind {
-            TreeKind::Module => FST::SpecialForm(Wrapped {
-                open: match tree.children[0].clone() {
-                    Child::Token(token) => token,
-                    Child::Tree(tree) => panic!("Expected token, got tree {:?}", tree),
-                },
-                inner: SpecialForm {
-                    keyword: match tree.children[1].clone() {
-                        Child::Token(token) => token,
-                        Child::Tree(tree) => panic!("Expected token, got tree {:?}", tree),
-                    },
-                    sections: vec![
-                        // name
-                        match tree.children[2].clone() {
-                            Child::Token(token) => FST::Literal(token),
-                            Child::Tree(tree) => panic!("Expected token, got tree {:?}", tree),
-                        },
-                        // governance
-                        match tree.children[3].clone() {
-                            Child::Token(token) => FST::Literal(token),
-                            Child::Tree(tree) => panic!("Expected token, got tree {:?}", tree),
-                        },
-                    ],
-                    // TODO: body not supported yet
-                    body: vec![],
-                },
-                close: match tree.children[4].clone() {
-                    Child::Token(token) => token,
-                    Child::Tree(tree) => panic!("Expected token, got tree {:?}", tree),
-                },
-            }),
+            TreeKind::Module => lower_module(&tree),
+            TreeKind::ListLiteral => lower_list(&tree),
             _ => panic!("Unsupported tree kind: {:?}", tree.kind),
         },
     }
+}
+
+fn lower_module(tree: &Tree) -> FST {
+    FST::SpecialForm(Wrapped {
+        open: extract_token(&tree.children[0], "open paren"),
+        inner: SpecialForm {
+            keyword: extract_token(&tree.children[1], "module keyword"),
+            sections: vec![
+                FST::Literal(extract_token(&tree.children[2], "name")),
+                FST::Literal(extract_token(&tree.children[3], "governance")),
+            ],
+            body: vec![],
+        },
+        close: extract_token(&tree.children[4], "close paren"),
+    })
+}
+
+fn extract_token(child: &Child, expected: &str) -> syntax::types::SourceToken {
+    match child {
+        Child::Token(token) => token.clone(),
+        _ => panic!("Expected token for {}", expected),
+    }
+}
+
+fn lower_list(tree: &Tree) -> FST {
+    let mut items = Vec::new();
+    let mut current_item: Option<ListItem> = None;
+
+    for i in 1..tree.children.len() - 1 {
+        match &tree.children[i] {
+            Child::Token(token) if token.text == "," => {
+                if let Some(item) = current_item.take() {
+                    items.push(ListItem {
+                        value: item.value,
+                        comma: Some(token.clone()),
+                    });
+                } else {
+                    panic!("Found comma with no preceding list item");
+                }
+            },
+            child => {
+                if let Some(item) = current_item.take() {
+                    items.push(item);
+                }
+
+                current_item = Some(ListItem {
+                    value: lower_child(child.clone()),
+                    comma: None,
+                });
+            }
+        }
+    }
+
+    if let Some(item) = current_item {
+        items.push(item);
+    }
+
+    FST::List(Wrapped {
+        open: extract_token(&tree.children[0], "open bracket"),
+        inner: items,
+        close: extract_token(&tree.children[tree.children.len() - 1], "close bracket"),
+    })
 }

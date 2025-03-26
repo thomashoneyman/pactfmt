@@ -36,7 +36,7 @@ pub struct Wrapped<T> {
 #[derive(Debug, PartialEq, Clone)]
 pub enum FST {
     Literal(SourceToken),
-    List(Wrapped<Vec<FST>>),
+    List(Wrapped<Vec<ListItem>>),
     Object(Wrapped<Vec<ObjectItem>>),
     SExp(Wrapped<Vec<FST>>),
     SpecialForm(Wrapped<SpecialForm>),
@@ -57,7 +57,17 @@ impl FST {
 
             FST::List(Wrapped { open, inner, close }) => {
                 let mut result = FormatDoc::nil(allocator);
-                let mut iter = inner.iter().map(|item| item.format(allocator));
+                let mut iter = inner.iter().map(|ListItem { value, comma }| {
+                    let comma = match comma {
+                        Some(comma) => format_with_comments(
+                            &comma.leading,
+                            &comma.trailing,
+                            FormatDoc::text(allocator, &comma.text),
+                        ),
+                        None => FormatDoc::nil(allocator),
+                    };
+                    value.format(allocator).append(comma)
+                });
                 if let Some(first) = iter.next() {
                     result = first;
                     for doc in iter {

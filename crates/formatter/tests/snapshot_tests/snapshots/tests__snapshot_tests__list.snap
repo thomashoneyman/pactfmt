@@ -1,0 +1,10 @@
+---
+source: crates/formatter/tests/snapshot_tests/mod.rs
+expression: "format_source(content, 60)"
+---
+[
+  1,
+  2, ; trailing comment
+  ; leading comment
+  3
+]

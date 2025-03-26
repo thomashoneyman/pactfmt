@@ -1,5 +1,0 @@
----
-source: crates/formatter/tests/tests.rs
-expression: "format_source(content, 40)"
----
-

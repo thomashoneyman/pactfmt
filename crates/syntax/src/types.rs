@@ -97,46 +97,37 @@ pub enum TokenKind {
     Error,
 }
 
-/// Tree kinds for syntax nodes in the Pact CST
+/// Tree kinds for syntax nodes in the Pact CST; these trees are simplified
+/// for formatting, but can be extended to cover more cases later.
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TreeKind {
+    File,
+
     // Top-level constructs
-    Program,
     Module,
     Interface,
     Import,
+    Expr,
 
     // Definitions
-    FunctionDef,
-    ConstDef,
-    CapabilityDef,
-    PactDef,
-    SchemaDef,
-    TableDef,
+    Defun,
+    Defconst,
+    Defcap,
+    Defpact,
+    Defschema,
+    Deftable,
 
-    // Parameters and type annotations
-    ParamList,
-    Param,
-    TypeAnnotation,
-
-    // Expressions
-    Let,
-    LetStar,
-    Lambda,
-    FunctionApp,
+    // Exprs
     Literal,
     ListLiteral,
     ObjectLiteral,
-    Property,
-    BinaryOp,
+    BindLiteral,
+    Let,
+    Lambda,
 
-    // Statements
-    Block,
-    Step,
-    StepWithRollback,
-
-    // References
+    // Names
     Name,
+    TypeAnnotation,
     QualifiedName,
 
     // Annotations

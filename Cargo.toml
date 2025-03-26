@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/formatter", "crates/syntax"]
+members = ["crates/formatter", "crates/syntax", "crates/test-utils"]
 
 [package]
 name = "pactfmt"

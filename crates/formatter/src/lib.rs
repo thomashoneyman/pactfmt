@@ -11,7 +11,7 @@ use crate::format_doc::FormatDoc;
 pub fn format_source(input: &str, width: usize) -> String {
     let tokens = tokenize(input);
     let parsed = parse(tokens);
-    let lowered = lower_tree::lower_program(parsed);
+    let lowered = lower_tree::lower_file(parsed);
     let format_doc = lowered
         .iter()
         .fold(FormatDoc::nil(&RcAllocator), |acc, fst| {
@@ -23,6 +23,5 @@ pub fn format_source(input: &str, width: usize) -> String {
 pub fn check_source(input: &str) -> bool {
     let tokens = tokenize(input);
     let parsed = parse(tokens);
-    // We'll consider it valid if parsing succeeds and returns a TreeKind::Program
-    parsed.kind == syntax::types::TreeKind::Program
+    parsed.kind == syntax::types::TreeKind::File
 }

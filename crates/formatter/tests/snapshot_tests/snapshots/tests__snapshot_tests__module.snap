@@ -1,0 +1,5 @@
+---
+source: crates/formatter/tests/snapshot_tests/mod.rs
+expression: "format_source(content, 60)"
+---
+(module name GOVERNANCE)

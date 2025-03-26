@@ -147,7 +147,7 @@ impl Parser {
     }
 }
 
-/// Parse a complete Pact program
+/// Parse a Pact file
 pub fn parse(tokens: Vec<SourceToken>) -> Tree {
     let mut p = Parser {
         tokens,
@@ -156,122 +156,70 @@ pub fn parse(tokens: Vec<SourceToken>) -> Tree {
         events: Vec::new(),
     };
 
-    program(&mut p);
+    file(&mut p);
     p.build_tree()
 }
 
-/// Program = TopLevel*
-fn program(p: &mut Parser) {
+/// File = TopLevel*
+fn file(p: &mut Parser) {
     let m = p.open();
-
     while !p.eof() {
         top_level(p);
     }
-
-    p.close(m, TreeKind::Program);
+    p.close(m, TreeKind::File);
 }
 
+/// TopLevel = Module | Interface | Use | Expr
 fn top_level(p: &mut Parser) {
     if p.at(TokenKind::OpenParen) {
-        let m = p.open();
-        p.expect(TokenKind::OpenParen);
-        p.expect(TokenKind::ModuleKeyword);
-        p.expect(TokenKind::Ident);
-        p.expect(TokenKind::Ident);
-        p.expect(TokenKind::CloseParen);
-        p.close(m, TreeKind::Module);
+        match p.nth(1) {
+            TokenKind::ModuleKeyword => module(p),
+            TokenKind::InterfaceKeyword => todo!("interface parser"),
+            TokenKind::ImportKeyword => todo!("import parser"),
+            _ => todo!("expr parser"),
+        }
+    } else if p.at(TokenKind::OpenBracket) {
+        number_list(p);
     } else {
-        p.advance_with_error("expected module");
+        p.advance_with_error("expected open paren, number, or top-level construct");
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::tokenize;
-    use crate::types::*;
-    use pretty_assertions::assert_eq;
+/// Module = '(' 'module' name:Ident gov:Governance Documentation? (ExternalDecl | Def)* ')'
+fn module(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::ModuleKeyword);
+    p.expect(TokenKind::Ident);
+    governance(p);
+    // TODO: documentation
+    // TODO: module body
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::Module);
+}
 
-    #[test]
-    fn test_module() {
-        let source = "(module test GOVERNANCE)";
-        let tokens = tokenize(source);
-        let tree = parse(tokens);
-
-        assert_eq!(tree.kind, TreeKind::Program);
-
-        assert_eq!(
-            tree.children,
-            vec![Child::Tree(Tree {
-                kind: TreeKind::Module,
-                children: vec![
-                    Child::Token(SourceToken {
-                        kind: TokenKind::OpenParen,
-                        text: "(".to_string(),
-                        range: SourceRange {
-                            start: SourcePos { line: 1, column: 1 },
-                            end: SourcePos { line: 1, column: 2 },
-                        },
-                        leading: vec![],
-                        trailing: vec![],
-                    }),
-                    Child::Token(SourceToken {
-                        kind: TokenKind::ModuleKeyword,
-                        text: "module".to_string(),
-                        range: SourceRange {
-                            start: SourcePos { line: 1, column: 2 },
-                            end: SourcePos { line: 1, column: 8 },
-                        },
-                        leading: vec![],
-                        trailing: vec![Trivia::Space(1)],
-                    }),
-                    Child::Token(SourceToken {
-                        kind: TokenKind::Ident,
-                        text: "test".to_string(),
-                        range: SourceRange {
-                            start: SourcePos { line: 1, column: 9 },
-                            end: SourcePos {
-                                line: 1,
-                                column: 13
-                            },
-                        },
-                        leading: vec![],
-                        trailing: vec![Trivia::Space(1)],
-                    }),
-                    Child::Token(SourceToken {
-                        kind: TokenKind::Ident,
-                        text: "GOVERNANCE".to_string(),
-                        range: SourceRange {
-                            start: SourcePos {
-                                line: 1,
-                                column: 14
-                            },
-                            end: SourcePos {
-                                line: 1,
-                                column: 24
-                            },
-                        },
-                        leading: vec![],
-                        trailing: vec![],
-                    }),
-                    Child::Token(SourceToken {
-                        kind: TokenKind::CloseParen,
-                        text: ")".to_string(),
-                        range: SourceRange {
-                            start: SourcePos {
-                                line: 1,
-                                column: 24
-                            },
-                            end: SourcePos {
-                                line: 1,
-                                column: 25
-                            },
-                        },
-                        leading: vec![],
-                        trailing: vec![],
-                    }),
-                ],
-            })]
-        );
+/// Governance = String | Symbol | Ident
+fn governance(p: &mut Parser) {
+    match p.nth(0) {
+        TokenKind::StringLit | TokenKind::SingleTick | TokenKind::Ident => p.advance(),
+        _ => p.advance_with_error("expected string, symbol, or capability name for governance"),
     }
+}
+
+// FIXME: Temporary, for verifying parser integration test
+fn number_list(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenBracket);
+    while !p.at(TokenKind::CloseBracket) {
+        if p.at(TokenKind::Number) {
+            p.advance();
+            if p.at(TokenKind::Comma) {
+                p.advance();
+            }
+        } else {
+            p.advance_with_error("expected number or closing bracket");
+        }
+    }
+    p.expect(TokenKind::CloseBracket);
+    p.close(m, TreeKind::ListLiteral);
 }

@@ -1,0 +1,8 @@
+[package]
+name = "test-utils"
+version = "0.1.0"
+edition = "2021"
+description = "Test utilities for pactfmt"
+publish = false
+
+[dependencies]
