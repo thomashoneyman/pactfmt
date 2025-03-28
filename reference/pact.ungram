@@ -4,7 +4,7 @@
 // env-keys, begin-tx, etc. are syntactically just function applications and are covered
 // by the Expr construct.
 
-Program = TopLevel*
+File = TopLevel*
 
 TopLevel =
   Module      // Module definition with functions, capabilities, etc.
@@ -14,30 +14,21 @@ TopLevel =
 
 // Module definition - the primary organizational unit in Pact
 // Contains definitions, imports, and other declarations
-Module = '(' 'module' name:Ident gov:Governance Documentation? (ExternalDecl | Def)* ')'
+Module = '(' 'module' name:'ident' gov:Governance Documentation? (ExternalDecl | Def)* ')'
 
 // Interface definition - defines a contract that modules can implement
 // Interfaces contain function signatures, constants, and schemas but no implementations
-Interface = '(' 'interface' name:Ident Documentation? (Use | IfDef)* ')'
+Interface = '(' 'interface' name:'ident' Documentation? (Use | IfDef)* ')'
 
 // Governance models - specifies how a module is governed
-Governance =
-  StringOrSymbol  // Keyset-based governance (keyset name as string)
-| Ident      // Capability-based governance (capability name)
+Governance = StringLiteral | SymbolLiteral | 'ident'
 
 // Documentation - either a docstring OR annotations, but not both
 // Provides information about the purpose and usage of definitions
-Documentation =
-  DocString
-| DefAnns
-
-// A simple docstring (a bare string at the beginning of a definition)
-DocString = StringLiteral
+Documentation = StringLiteral | DefAnns
 
 // Definition annotations - can have @doc, @model, or both
-DefAnns =
-  Doc Model?
-| Model Doc?
+DefAnns = Doc Model? | Model Doc?
 
 // Documentation annotation - @doc annotation
 Doc = '@doc' StringLiteral
@@ -49,27 +40,24 @@ Model = '@model' PropList
 
 // External declarations - declarations that reference things outside the module
 // These establish relationships with other modules and interfaces
-ExternalDecl =
-  Use
-| Implements
-| Bless
+ExternalDecl = Use | Implements | Bless
 
 // Import declaration - brings definitions from other modules into scope
 // The string is an optional hash for version pinning
 // The ImportList is an optional list of specific names to import
-Use = '(' 'use' QualifiedName StringLiteral? ImportList? ')'
-
-// Declare that this module implements an interface
-// This creates a contract that the module will provide all definitions required by the interface
-Implements = '(' 'implements' QualifiedName ')'
-
-// Bless a specific hash
-// Used for module versioning and upgrade paths
-Bless = '(' 'bless' StringLiteral ')'
+Use = '(' 'use' Name StringLiteral? ImportList? ')'
 
 // List of specific names to import (when present, must have at least one)
 // Allows selective importing of definitions from a module
-ImportList = '[' Ident* ']'
+ImportList = '[' 'ident'* ']'
+
+// Declare that this module implements an interface
+// This creates a contract that the module will provide all definitions required by the interface
+Implements = '(' 'implements' Name ')'
+
+// Bless a specific hash
+// Used for module versioning and upgrade paths
+Bless = '(' 'bless' (StringLiteral | SymbolLiteral) ')'
 
 // Definitions - various types of definitions that can appear in a module
 // These are the primary building blocks of Pact modules
@@ -81,30 +69,30 @@ Def =
 | DefTable  // Table definition - defines a database table with a schema
 | DefPact   // Pact (multi-step transaction) definition - defines a cross-chain transaction
 
-// List of arguments, which can be empty '()'
-ArgList = '(' Arg* ')'
+// List of parameters, which can be empty '()'
+ParamList = '(' Param* ')'
 
 // Function definition - defines a named function with parameters and body.
 // Documentation must come first, and body must have at least one expr.
-Defun = '(' 'defun' name:Ident TypeAnn? ArgList Documentation? Expr* ')'
+Defun = '(' 'defun' name:'ident' TypeAnn? ParamList Documentation? Expr* ')'
 
 // Constant definition - defines a named constant value
-DefConst = '(' 'defconst' name:Ident TypeAnn? Documentation? Expr ')'
+DefConst = '(' 'defconst' name:'ident' TypeAnn? Documentation? Expr ')'
 
 // Capability definition - defines a capability (access control mechanism)
 // Must have at least one expression in the body
 // Can include metadata like @event and @managed
-DefCap = '(' 'defcap' name:Ident TypeAnn? ArgList Documentation? (CapMeta | Expr)* ')'
+DefCap = '(' 'defcap' name:'ident' TypeAnn? ParamList Documentation? (CapMeta | Expr)* ')'
 
 // Schema definition - defines a data structure schema (like a record type)
-DefSchema = '(' 'defschema' name:Ident Documentation? SchemaArg* ')'
+DefSchema = '(' 'defschema' name:'ident' Documentation? SchemaField* ')'
 
 // Table definition - defines a database table with a schema
-DefTable = '(' 'deftable' name:Ident ':' '{' schema:ParsedName '}' (DocString | Doc)? ')'
+DefTable = '(' 'deftable' name:'ident' ':' '{' schema:ParsedName '}' (StringLiteral | Doc)? ')'
 
 // Pact definition - defines a multi-step transaction
 // Used for cross-chain transactions and complex multi-stage operations
-DefPact = '(' 'defpact' name:Ident TypeAnn? ArgList Documentation? PactStep* ')'
+DefPact = '(' 'defpact' name:'ident' TypeAnn? ParamList Documentation? PactStep* ')'
 
 // Pact steps - individual steps in a multi-step transaction
 // Steps can be executed across different chains and transactions
@@ -124,36 +112,35 @@ IfDef =
 
 // Interface function definition - only signature, no implementation
 // Modules implementing the interface must provide matching implementations
-IfDefun = '(' 'defun' name:Ident TypeAnn? ArgList Documentation? ')'
+IfDefun = '(' 'defun' name:'ident' TypeAnn? ParamList Documentation? ')'
 
 // Interface capability definition - only signature, no implementation
 // Modules implementing the interface must provide matching capability definitions
-IfDefCap = '(' 'defcap' name:Ident TypeAnn? ArgList Documentation? CapMeta* ')'
+IfDefCap = '(' 'defcap' name:'ident' TypeAnn? ParamList Documentation? CapMeta* ')'
 
 // Interface pact definition - only signature, no implementation
 // Modules implementing the interface must provide matching pact definitions
-IfDefPact = '(' 'defpact' name:Ident TypeAnn? ArgList Documentation? ')'
+IfDefPact = '(' 'defpact' name:'ident' TypeAnn? ParamList Documentation? ')'
 
 // Capability metadata - additional information for capabilities
 // Controls how capabilities are managed and emitted as events
 CapMeta =
   '@event' BoolLiteral?
 | '@managed'
-| '@managed' resource:ParsedName defun:Ident
+| '@managed' resource:ParsedName defun:'ident'
 
-// Arguments - function and other parameters
-// Arg = Function argument with optional type annotation
-Arg = name:Ident TypeAnn?
-SchemaArg = name:Ident TypeAnn  // Schema field (always has a type)
+Param = name:'ident' TypeAnn?
 
-TypeAnn = ':' Type  // Type annotation
+SchemaField = name:'ident' TypeAnn
+
+TypeAnn = ':' Type
 
 Type =
-  PrimType                        // Primitive type
-| '[' Type ']'                    // List type
-| 'module' '{' QualifiedName* '}' // Module reference type, comma separated
-| Ident '{' ParsedTyName '}' // Schema type for tables, objects (for object would be ident 'object')
-| '*'                             // Any type (for lists)
+  PrimType                      // Primitive type
+| '[' (Type | '*') ']'          // List type
+| 'module' '{' (Name ','?)* '}' // Module reference type, comma separated
+| 'object' '{' (Name | '*') '}' // Object type
+| 'ident' '{' Name '}'            // Schema type for tables
 
 // Primitive types
 PrimType =
@@ -185,10 +172,10 @@ Var = ParsedName
 // Let binding - local variable definitions
 Let = '(' ('let' | 'let*') '(' Binder* ')' Expr* ')'
 
-Binder = '(' name:Ident TypeAnn? value:Expr ')'
+Binder = '(' name:'ident' TypeAnn? value:Expr ')'
 
 // Lambda expression - anonymous function
-Lam = '(' 'lambda' ArgList Expr* ')'
+Lam = '(' 'lambda' ParamList Expr* ')'
 
 // Basic function application. Function must be a name, because
 // Pact does not allow exprs to return functions.
@@ -202,24 +189,20 @@ List = '[' items:(Expr ','?)* ']'
 
 // String or symbol keys with expr values, separated by commas
 Object = '{' fields:FieldPair* '}'
-FieldPair = key:StringOrSymbol ':' value:Expr ','?
+FieldPair = key:(StringLiteral | SymbolLiteral) ':' value:Expr ','?
 
 // Binding pair - key-value pair in a binding form
 // The key is a string or symbol, followed by := and an argument (which may
 // have a type annotation), separated by commas.
-BindPair = key:StringOrSymbol ':=' arg:Arg ','?
+BindPair = key:(StringLiteral | SymbolLiteral) ':=' arg:'ident' TypeAnn? ','?
 
 Literal =
   IntLiteral       // Integer literal (e.g., 42)
 | DecimalLiteral   // Decimal literal (e.g., 3.14)
-| StringOrSymbol   // String or symbol literal
+| StringLiteral    // String literal (e.g., "example")
+| SymbolLiteral    // Symbol literal (e.g., 'example)
 | BoolLiteral      // Boolean literal (true/false)
 | '(' ')'          // Unit literal (empty value)
-
-// String representations in Pact
-StringOrSymbol =
-  StringLiteral    // Double-quoted string: "example"
-| SymbolLiteral    // Single-quoted symbol: 'example (no terminating quote)
 
 // String literal - double-quoted string, including strings with escapes
 // Format: "..." where content can include any character except unescaped double quotes
@@ -240,39 +223,15 @@ BoolLiteral =
   'true'
 | 'false'
 
-// Ident - a name used for variables, functions, modules, etc.
-// First character must be a letter or special symbol from the set (%#+-_&$@<>=^?*!|/~)
-// Subsequent characters can be letters, digits, or special symbols
-// Cannot be a reserved keyword
-Ident = 'ident'
-
-// A simple name is a single identifier
-BareName = Ident
-
-// A potentially-qualified name, either a terminal or a path part
-DottableName =
-  Ident
-| Ident '.' DottableName
-
 // A qualified name - contains at least one dot
 // In the parser, this is represented as a head and a ModQual
-QualifiedName = head:Ident '.' DottableName
+Name = head:'ident' ('.' 'ident')*
 
 // Module reference - references a name from a specific module using ::
-// Not used for static references, so this uses Ident instead of 'Dottable'
-ModRef = module:Ident '::' name:Ident
+ModRef = module:'ident' '::' name:'ident'
 
 // Name reference - used in most contexts where a name is needed
-ParsedName =
-  BareName       // Simple name (e.g., "add")
-| QualifiedName  // Qualified name (e.g., "math.add")
-| ModRef         // Module reference (e.g., "module::name")
-
-// Type name reference - used specifically for type references
-// Cannot use module references for types
-ParsedTyName =
-  BareName       // Simple type name (e.g., "integer")
-| QualifiedName  // Qualified type name (e.g., "user.profile")
+ParsedName = Name | ModRef
 
 PropertyExpr =
   Var
@@ -289,11 +248,11 @@ PropertyExpr =
 PropLet = '(' 'let' '(' PropBinder* ')' PropertyExpr* ')'
 
 // Binder for property let expressions
-PropBinder = '(' name:Ident value:PropertyExpr ')'
+PropBinder = '(' name:'ident' value:PropertyExpr ')'
 
 // Lambda expression in property expressions - uses 'lam' keyword (not 'lambda')
 // Similar to Lam in the main language but specific to property expressions
-PropLam = '(' 'lam' ArgList PropertyExpr* ')'
+PropLam = '(' 'lam' ParamList PropertyExpr* ')'
 
 // Application of property expressions
 PropApp = '(' fn:ParsedName args:PropertyExpr* ')'
@@ -304,4 +263,4 @@ PropList = '[' items:PropertyExpr* ']'
 // Property definition - defines a named property with optional arguments
 // Unlike defun, args are entirely optional and no parens are needed; also,
 // the body is a single expression.
-PropDefProperty = '(' 'defproperty' name:Ident args:ArgList? body:PropertyExpr ')'
+PropDefProperty = '(' 'defproperty' name:'ident' args:ParamList? body:PropertyExpr ')'

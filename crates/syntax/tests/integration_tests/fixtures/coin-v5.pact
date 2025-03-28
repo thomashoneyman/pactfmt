@@ -1,5 +1,4 @@
 (module coin GOVERNANCE
-
     @doc "'coin' represents the Kadena Coin Contract. This contract provides both the \
     \buy/redeem gas support in the form of 'fund-tx', as well as transfer,       \
     \credit, debit, coinbase, account creation and query, as well as SPV burn    \
@@ -277,7 +276,7 @@
         )
       )
 
-    (defun details:object{fungible-v2.account-details}
+    (defun details:object
       ( account:string )
       (with-read coin-table account
         { "balance" := bal

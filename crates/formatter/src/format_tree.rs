@@ -1,17 +1,17 @@
 use crate::format_doc::{doc_is_nil, format_with_comments, FormatDoc};
 use pretty::DocAllocator;
-use syntax::cst::*;
+use syntax::types::SourceToken;
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ListItem {
     pub value: FST,
-    pub comma: Option<SourceToken<String>>,
+    pub comma: Option<SourceToken>,
 }
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ObjectItem {
-    pub key: SourceToken<String>,
-    pub sep: SourceToken<String>,
+    pub key: SourceToken,
+    pub sep: SourceToken,
     pub value: FST,
 }
 
@@ -19,17 +19,24 @@ pub struct ObjectItem {
 /// (defun NAME (arg1 arg2) body1 body2)
 #[derive(Debug, PartialEq, Clone)]
 pub struct SpecialForm {
-    pub keyword: SourceToken<String>,
+    pub keyword: SourceToken,
     pub sections: Vec<FST>,
     pub body: Vec<FST>,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub struct Wrapped<T> {
+    pub open: SourceToken,
+    pub inner: T,
+    pub close: SourceToken,
+}
+
 /// A 'format syntax tree' is an intermediate representation of the CST simplified for formatting.
-#[allow(clippy::upper_case_acronyms)]
+#[allow(clippy::upper_case_acronyms, dead_code)]
 #[derive(Debug, PartialEq, Clone)]
 pub enum FST {
-    Literal(SourceToken<String>),
-    List(Wrapped<Vec<FST>>),
+    Literal(SourceToken),
+    List(Wrapped<Vec<ListItem>>),
     Object(Wrapped<Vec<ObjectItem>>),
     SExp(Wrapped<Vec<FST>>),
     SpecialForm(Wrapped<SpecialForm>),
@@ -42,15 +49,25 @@ impl FST {
         D::Doc: Clone,
     {
         match self {
-            FST::Literal(SourceToken {
-                leading,
-                value,
-                trailing,
-            }) => format_with_comments(leading, trailing, FormatDoc::text(allocator, value)),
+            FST::Literal(token) => format_with_comments(
+                &token.leading,
+                &token.trailing,
+                FormatDoc::text(allocator, &token.text),
+            ),
 
             FST::List(Wrapped { open, inner, close }) => {
                 let mut result = FormatDoc::nil(allocator);
-                let mut iter = inner.iter().map(|item| item.format(allocator));
+                let mut iter = inner.iter().map(|ListItem { value, comma }| {
+                    let comma = match comma {
+                        Some(comma) => format_with_comments(
+                            &comma.leading,
+                            &comma.trailing,
+                            FormatDoc::text(allocator, &comma.text),
+                        ),
+                        None => FormatDoc::nil(allocator),
+                    };
+                    value.format(allocator).append(comma)
+                });
                 if let Some(first) = iter.next() {
                     result = first;
                     for doc in iter {
@@ -61,14 +78,14 @@ impl FST {
                 format_with_comments(
                     &open.leading,
                     &open.trailing,
-                    FormatDoc::text(allocator, &open.value),
+                    FormatDoc::text(allocator, &open.text),
                 )
                 .join_line_(result)
                 .nest(2)
                 .join_line_(format_with_comments(
                     &close.leading,
                     &close.trailing,
-                    FormatDoc::text(allocator, &close.value),
+                    FormatDoc::text(allocator, &close.text),
                 ))
                 .group()
             }
@@ -79,12 +96,12 @@ impl FST {
                     format_with_comments(
                         &key.leading,
                         &key.trailing,
-                        FormatDoc::text(allocator, key.value.clone()),
+                        FormatDoc::text(allocator, key.text.clone()),
                     )
                     .append(format_with_comments(
                         &sep.leading,
                         &sep.trailing,
-                        FormatDoc::text(allocator, sep.value.clone()),
+                        FormatDoc::text(allocator, sep.text.clone()),
                     ))
                     .join_space(value.format(allocator))
                     .nest(2)
@@ -99,14 +116,14 @@ impl FST {
                 format_with_comments(
                     &open.leading,
                     &open.trailing,
-                    FormatDoc::text(allocator, &open.value),
+                    FormatDoc::text(allocator, &open.text),
                 )
                 .join_line_(result)
                 .nest(2)
                 .join_line_(format_with_comments(
                     &close.leading,
                     &close.trailing,
-                    FormatDoc::text(allocator, &close.value),
+                    FormatDoc::text(allocator, &close.text),
                 ))
                 .group()
             }
@@ -124,12 +141,12 @@ impl FST {
                 format_with_comments(
                     &open.leading,
                     &open.trailing,
-                    FormatDoc::text(allocator, &open.value)
+                    FormatDoc::text(allocator, &open.text)
                         .append(result.nest(2))
                         .append(format_with_comments(
                             &close.leading,
                             &close.trailing,
-                            FormatDoc::text(allocator, &close.value),
+                            FormatDoc::text(allocator, &close.text),
                         ))
                         .group(),
                 )
@@ -148,19 +165,19 @@ impl FST {
                 let open = format_with_comments(
                     &open.leading,
                     &open.trailing,
-                    FormatDoc::text(allocator, &open.value),
+                    FormatDoc::text(allocator, &open.text),
                 );
 
                 let keyword = format_with_comments(
                     &keyword.leading,
                     &keyword.trailing,
-                    FormatDoc::text(allocator, keyword.value.clone()),
+                    FormatDoc::text(allocator, keyword.text.clone()),
                 );
 
                 let close = format_with_comments(
                     &close.leading,
                     &close.trailing,
-                    FormatDoc::text(allocator, &close.value),
+                    FormatDoc::text(allocator, &close.text),
                 );
 
                 let mut sections_doc = FormatDoc::nil(allocator);

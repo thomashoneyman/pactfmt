@@ -5,10 +5,10 @@ edition = "2021"
 
 [dependencies]
 syntax = { path = "../syntax" }
-logos = "0.14.2"
 pretty = "0.12.3"
-winnow = "0.6.20"
 
 [dev-dependencies]
 insta = "1.41.1"
+pretty_assertions = "1.4.0"
 test_each_file = "0.3.4"
+test-utils = { path = "../test-utils" }

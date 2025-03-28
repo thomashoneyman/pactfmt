@@ -1,7 +1,7 @@
 use pretty::{Doc, DocAllocator, DocBuilder};
 use std::cmp;
 use std::convert::identity;
-use syntax::cst::Spacing;
+use syntax::types::Trivia;
 
 /// A hint to the pretty printer to break a line or add a space. For example,
 /// a user-provided newline should break the line even if the pretty layout
@@ -230,7 +230,7 @@ where
 
 fn format_comment<'a, D>(
     line_comment: impl Fn(String, FormatDoc<'a, D>) -> FormatDoc<'a, D>,
-    com: &Spacing,
+    com: &Trivia,
     next: FormatDoc<'a, D>,
 ) -> FormatDoc<'a, D>
 where
@@ -238,14 +238,15 @@ where
     D::Doc: Clone,
 {
     match com {
-        Spacing::Comment(str) => line_comment(str.to_string(), next),
-        Spacing::Newline(n) => source_break(*n, next),
+        Trivia::Comment(str) => line_comment(str.to_string(), next),
+        Trivia::Space(_) => next,
+        Trivia::Line(n) => source_break(*n, next),
     }
 }
 
 pub fn format_with_comments<'a, D>(
-    leading: &[Spacing],
-    trailing: &[Spacing],
+    leading: &[Trivia],
+    trailing: &[Trivia],
     doc: FormatDoc<'a, D>,
 ) -> FormatDoc<'a, D>
 where
