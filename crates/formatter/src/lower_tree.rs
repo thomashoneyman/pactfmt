@@ -54,7 +54,7 @@ fn lower_list(tree: &Tree) -> FST {
                 } else {
                     panic!("Found comma with no preceding list item");
                 }
-            },
+            }
             child => {
                 if let Some(item) = current_item.take() {
                     items.push(item);

@@ -526,7 +526,10 @@ mod tests {
         assert_eq!(tokens[10].kind, TokenKind::Ident);
         assert_eq!(tokens[11].kind, TokenKind::CloseParen);
         assert_eq!(tokens[12].kind, TokenKind::CloseParen);
-        assert_eq!(tokens[12].trailing, vec![Trivia::Space(1), Trivia::Comment("; comment".to_string())]);
+        assert_eq!(
+            tokens[12].trailing,
+            vec![Trivia::Space(1), Trivia::Comment("; comment".to_string())]
+        );
         assert_eq!(tokens[13].kind, TokenKind::Eof);
 
         // Check text
@@ -602,6 +605,4 @@ mod tests {
         assert_eq!(tokens[2].text, "£");
         assert_eq!(tokens[4].text, "€");
     }
-
-
 }

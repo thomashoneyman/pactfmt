@@ -51,7 +51,10 @@ pub fn find_pact_files(dir: &str) -> Vec<PathBuf> {
 pub fn flatten_pact_file(file: &PathBuf) -> String {
     let content = std::fs::read_to_string(&file).expect("Failed to read file content");
     if content.contains(";") {
-        panic!("Comments are not allowed in integration test files due to flattening: {}", file.display());
+        panic!(
+            "Comments are not allowed in integration test files due to flattening: {}",
+            file.display()
+        );
     }
     flatten_pact_string(&content)
 }
