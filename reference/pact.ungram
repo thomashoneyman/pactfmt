@@ -25,18 +25,15 @@ Governance = StringLiteral | SymbolLiteral | 'ident'
 
 // Documentation - either a docstring OR annotations, but not both
 // Provides information about the purpose and usage of definitions
-Documentation = StringLiteral | DefAnns
-
-// Definition annotations - can have @doc, @model, or both
-DefAnns = Doc Model? | Model Doc?
+Documentation = StringLiteral | DocAnnotation? ModelAnnotation? | ModelAnnotation? DocAnnotation?
 
 // Documentation annotation - @doc annotation
-Doc = '@doc' StringLiteral
+DocAnnotation = '@doc' StringLiteral
 
 // Model annotation for formal verification
 // Contains a list of property expressions enclosed in square brackets
 // Used to specify invariants and properties for formal verification
-Model = '@model' PropList
+ModelAnnotation = '@model' PropList
 
 // External declarations - declarations that reference things outside the module
 // These establish relationships with other modules and interfaces
@@ -63,11 +60,11 @@ Bless = '(' 'bless' (StringLiteral | SymbolLiteral) ')'
 // These are the primary building blocks of Pact modules
 Def =
   Defun     // Function definition - defines a named function with parameters and body
-| DefConst  // Constant definition - defines a named constant value
-| DefCap    // Capability definition - defines an access control mechanism
-| DefSchema // Schema definition - defines a new type
-| DefTable  // Table definition - defines a database table with a schema
-| DefPact   // Pact (multi-step transaction) definition - defines a cross-chain transaction
+| Defconst  // Constant definition - defines a named constant value
+| Defcap    // Capability definition - defines an access control mechanism
+| Defschema // Schema definition - defines a new type
+| Deftable  // Table definition - defines a database table with a schema
+| Defpact   // Pact (multi-step transaction) definition - defines a cross-chain transaction
 
 // List of parameters, which can be empty '()'
 ParamList = '(' Param* ')'
@@ -77,38 +74,37 @@ ParamList = '(' Param* ')'
 Defun = '(' 'defun' name:'ident' TypeAnn? ParamList Documentation? Expr* ')'
 
 // Constant definition - defines a named constant value
-DefConst = '(' 'defconst' name:'ident' TypeAnn? Documentation? Expr ')'
+Defconst = '(' 'defconst' name:'ident' TypeAnn? Documentation? Expr ')'
 
 // Capability definition - defines a capability (access control mechanism)
 // Must have at least one expression in the body
 // Can include metadata like @event and @managed
-DefCap = '(' 'defcap' name:'ident' TypeAnn? ParamList Documentation? (CapMeta | Expr)* ')'
+Defcap = '(' 'defcap' name:'ident' TypeAnn? ParamList Documentation? (CapabilityMeta | Expr)* ')'
 
 // Schema definition - defines a data structure schema (like a record type)
-DefSchema = '(' 'defschema' name:'ident' Documentation? SchemaField* ')'
+Defschema = '(' 'defschema' name:'ident' Documentation? SchemaField* ')'
 
 // Table definition - defines a database table with a schema
-DefTable = '(' 'deftable' name:'ident' ':' '{' schema:ParsedName '}' (StringLiteral | Doc)? ')'
+Deftable = '(' 'deftable' name:'ident' ':' '{' schema:ParsedName '}' (StringLiteral | DocAnnotation)? ')'
 
 // Pact definition - defines a multi-step transaction
 // Used for cross-chain transactions and complex multi-stage operations
-DefPact = '(' 'defpact' name:'ident' TypeAnn? ParamList Documentation? PactStep* ')'
+Defpact = '(' 'defpact' name:'ident' TypeAnn? ParamList Documentation? (Step | StepWithRollback | Resume)* ')'
 
 // Pact steps - individual steps in a multi-step transaction
 // Steps can be executed across different chains and transactions
-PactStep =
-  '(' 'step' entity:ParsedName? body:Expr Model? ')'
-| '(' 'step-with-rollback' entity:ParsedName? body:Expr rollback:Expr Model? ')'
-| '(' 'resume' binding:Binding body:Expr* ')'
+Step = '(' 'step' entity:ParsedName? body:Expr ModelAnnotation? ')'
+StepWithRollback = '(' 'step-with-rollback' entity:ParsedName? body:Expr rollback:Expr ModelAnnotation? ')'
+Resume = '(' 'resume' binding:Binding body:Expr* ')'
 
 // Interface definitions - definitions that can appear in an interface
 // These provide signatures without implementations
 IfDef =
   IfDefun
-| DefConst
-| IfDefCap
-| DefSchema
-| IfDefPact
+| Defconst
+| IfDefcap
+| Defschema
+| IfDefpact
 
 // Interface function definition - only signature, no implementation
 // Modules implementing the interface must provide matching implementations
@@ -116,15 +112,15 @@ IfDefun = '(' 'defun' name:'ident' TypeAnn? ParamList Documentation? ')'
 
 // Interface capability definition - only signature, no implementation
 // Modules implementing the interface must provide matching capability definitions
-IfDefCap = '(' 'defcap' name:'ident' TypeAnn? ParamList Documentation? CapMeta* ')'
+IfDefcap = '(' 'defcap' name:'ident' TypeAnn? ParamList Documentation? CapabilityMeta* ')'
 
 // Interface pact definition - only signature, no implementation
 // Modules implementing the interface must provide matching pact definitions
-IfDefPact = '(' 'defpact' name:'ident' TypeAnn? ParamList Documentation? ')'
+IfDefpact = '(' 'defpact' name:'ident' TypeAnn? ParamList Documentation? ')'
 
 // Capability metadata - additional information for capabilities
 // Controls how capabilities are managed and emitted as events
-CapMeta =
+CapabilityMeta =
   '@event' BoolLiteral?
 | '@managed'
 | '@managed' resource:ParsedName defun:'ident'
@@ -157,17 +153,14 @@ PrimType =
 | 'table'
 
 Expr =
-  Var
-| Let
+  Let
 | Lam
 | App
 | List
 | Literal
+| ParsedName // 'Var'
 | Object
 | Binding
-
-// Variable reference - refers to a defined name
-Var = ParsedName
 
 // Let binding - local variable definitions
 Let = '(' ('let' | 'let*') '(' Binder* ')' Expr* ')'
@@ -181,14 +174,15 @@ Lam = '(' 'lambda' ParamList Expr* ')'
 // Pact does not allow exprs to return functions.
 App = '(' fn:ParsedName args:Expr* ')'
 
-Binding = '{' BindPair* '}' // Named argument binding form: { "a" := 1, ... }
-
 // Note: In Pact, list elements can be separated by spaces or commas
 // but not both, and no trailing commas allowed.
 List = '[' items:(Expr ','?)* ']'
 
+Binding = '{' BindPair* '}' // Named argument binding form: { "a" := 1, ... }
+
 // String or symbol keys with expr values, separated by commas
 Object = '{' fields:FieldPair* '}'
+
 FieldPair = key:(StringLiteral | SymbolLiteral) ':' value:Expr ','?
 
 // Binding pair - key-value pair in a binding form
@@ -234,7 +228,7 @@ ModRef = module:'ident' '::' name:'ident'
 ParsedName = Name | ModRef
 
 PropertyExpr =
-  Var
+  ParsedName
 | PropLet          // Let binding in property expressions (no let*)
 | PropLam          // Lambda expression in property expressions ('lam' keyword)
 | PropApp          // Application of property expressions
@@ -264,3 +258,4 @@ PropList = '[' items:PropertyExpr* ']'
 // Unlike defun, args are entirely optional and no parens are needed; also,
 // the body is a single expression.
 PropDefProperty = '(' 'defproperty' name:'ident' args:ParamList? body:PropertyExpr ')'
+

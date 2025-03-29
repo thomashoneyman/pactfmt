@@ -246,12 +246,14 @@ impl<'a> Lexer<'a> {
                     "deftable" => TokenKind::DefTableKeyword,
                     "true" => TokenKind::True,
                     "false" => TokenKind::False,
-                    "expect-typechecks" => TokenKind::ExpectTypechecksKeyword,
-                    "expect-typecheck-failure" => TokenKind::ExpectTypecheckFailureKeyword,
+                    // Reserved in the parser, but not in the lexer
                     "with-capability" => TokenKind::WithCapabilityKeyword,
-                    "create-user-guard" => TokenKind::CreateUserGuardKeyword,
+                    "with-read" => TokenKind::WithReadKeyword,
+                    "with-default-read" => TokenKind::WithDefaultReadKeyword,
                     "enforce" => TokenKind::EnforceKeyword,
-                    "enforce-one" => TokenKind::EnforceOneKeyword,
+                    "if" => TokenKind::IfKeyword,
+                    "cond" => TokenKind::CondKeyword,
+                    "do" => TokenKind::DoKeyword,
                     _ => TokenKind::Ident,
                 }
             }

@@ -132,12 +132,13 @@ fn format_tokens_for_comparison(tokens: &[SourceToken]) -> Vec<String> {
             TokenKind::False => "false".to_string(),
 
             // Keywords not reserved in the Pact lexer, but reserved in the parser
-            TokenKind::ExpectTypechecksKeyword => "ident<expect-typechecks>".to_string(),
-            TokenKind::ExpectTypecheckFailureKeyword => "ident<expect-typecheck-failure>".to_string(),
             TokenKind::WithCapabilityKeyword => "ident<with-capability>".to_string(),
-            TokenKind::CreateUserGuardKeyword => "ident<create-user-guard>".to_string(),
+            TokenKind::WithReadKeyword => "ident<with-read>".to_string(),
+            TokenKind::WithDefaultReadKeyword => "ident<with-default-read>".to_string(),
             TokenKind::EnforceKeyword => "ident<enforce>".to_string(),
-            TokenKind::EnforceOneKeyword => "ident<enforce-one>".to_string(),
+            TokenKind::IfKeyword => "ident<if>".to_string(),
+            TokenKind::CondKeyword => "ident<cond>".to_string(),
+            TokenKind::DoKeyword => "ident<do>".to_string(),
 
             // Special tokens
             TokenKind::Eof => "eof".to_string(),
