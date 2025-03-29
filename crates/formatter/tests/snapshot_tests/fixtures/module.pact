@@ -1,1 +1,2 @@
-(module name   GOVERNANCE)
+(module name   GOVERNANCE
+  (defcap GOVERNANCE () true))

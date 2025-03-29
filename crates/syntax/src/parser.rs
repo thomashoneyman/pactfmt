@@ -141,7 +141,6 @@ impl Parser {
     }
 }
 
-/// Parse a Pact file
 pub fn parse(tokens: Vec<SourceToken>) -> Tree {
     let mut p = Parser {
         tokens,
@@ -153,7 +152,13 @@ pub fn parse(tokens: Vec<SourceToken>) -> Tree {
     p.build_tree()
 }
 
-/// File = TopLevel*
+// Immediate TODOs:
+//   - module body
+//   - typed identifiers
+//   - annotations (doc, event, etc)
+//
+// Then move on to lower_tree and iterate?
+
 fn file(p: &mut Parser) {
     let m = p.open();
     while !p.eof() {
@@ -184,7 +189,17 @@ fn module(p: &mut Parser) {
     p.expect(TokenKind::Ident);
     governance(p);
     // TODO: documentation
-    // TODO: module body
+    while !p.at(TokenKind::CloseParen) && !p.eof() {
+        if p.at(TokenKind::OpenParen) {
+            match p.nth(1) {
+                TokenKind::DefunKeyword => defun(p),
+                TokenKind::DefcapKeyword => defcap(p),
+                _ => todo!("other definitions"),
+            }
+        } else {
+            p.advance_with_error("expected open paren for definition or external decl");
+        }
+    }
     p.expect(TokenKind::CloseParen);
     p.close(m, TreeKind::Module);
 }
@@ -194,6 +209,38 @@ fn governance(p: &mut Parser) {
         TokenKind::String | TokenKind::Symbol | TokenKind::Ident => p.advance(),
         _ => p.advance_with_error("expected string, symbol, or capability name for governance"),
     }
+}
+
+fn defun(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::DefunKeyword);
+    p.expect(TokenKind::Ident);
+    if p.at(TokenKind::Colon) {
+        todo!("type")
+    }
+    param_list(p);
+    while !p.at(TokenKind::CloseParen) && !p.eof() {
+        expr(p);
+    }
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::Defun);
+}
+
+fn defcap(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::DefcapKeyword);
+    p.expect(TokenKind::Ident);
+    if p.at(TokenKind::Colon) {
+        todo!("type")
+    }
+    param_list(p);
+    while !p.at(TokenKind::CloseParen) && !p.eof() {
+        expr(p);
+    }
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::Defcap);
 }
 
 fn expr(p: &mut Parser) {
@@ -229,7 +276,15 @@ fn expr_let(p: &mut Parser) {
     p.expect(TokenKind::OpenParen);
     while !p.at(TokenKind::CloseParen) && !p.eof() {
         if p.at(TokenKind::OpenParen) {
-            let_binder(p);
+            let m = p.open();
+            p.expect(TokenKind::OpenParen);
+            p.expect(TokenKind::Ident);
+            if p.at(TokenKind::Colon) {
+                todo!("parse types...");
+            }
+            expr(p);
+            p.expect(TokenKind::CloseParen);
+            p.close(m, TreeKind::Binder);
         } else {
             p.advance_with_error("expected a valid binder");
         }
@@ -240,18 +295,6 @@ fn expr_let(p: &mut Parser) {
 
     p.expect(TokenKind::CloseParen);
     p.close(m, TreeKind::Let)
-}
-
-fn let_binder(p: &mut Parser) {
-    let m = p.open();
-    p.expect(TokenKind::OpenParen);
-    p.expect(TokenKind::Ident);
-    if p.at(TokenKind::Colon) {
-        todo!("parse types...");
-    }
-    expr(p);
-    p.expect(TokenKind::CloseParen);
-    p.close(m, TreeKind::Binder);
 }
 
 fn expr_lambda(p: &mut Parser) {
@@ -380,8 +423,7 @@ mod tests {
     #[test]
     fn parser_debug() {
         let input = r#"
-            (+ -1.23 { 'a: 1.001 })
-            (lambda (a b) (+ a b))
+            (module my-mod GOV (defcap GOV () true) (defun wot (a b) (+ 1 b)))
         "#;
         let tokens = tokenize(input);
         let parsed = parse(tokens);

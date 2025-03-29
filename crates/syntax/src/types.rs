@@ -1,5 +1,3 @@
-/// CST types, inspired by
-/// https://matklad.github.io/2023/05/21/resilient-ll-parsing-tutorial.html
 #[derive(Debug, PartialEq, Clone)]
 pub struct SourcePos {
     pub line: usize,
@@ -47,17 +45,17 @@ pub enum TokenKind {
     LambdaKeyword,
     ModuleKeyword,
     InterfaceKeyword,
-    ImportKeyword, // 'use' keyword
+    ImportKeyword, // use keyword
     BlessKeyword,
     ImplementsKeyword,
     StepKeyword,
     StepWithRollbackKeyword,
     DefunKeyword,
-    DefConstKeyword,
-    DefCapKeyword,
-    DefPactKeyword,
-    DefSchemaKeyword,
-    DefTableKeyword,
+    DefconstKeyword,
+    DefcapKeyword,
+    DefpactKeyword,
+    DefschemaKeyword,
+    DeftableKeyword,
     DocAnnKeyword,     // @doc
     ModelAnnKeyword,   // @model
     EventAnnKeyword,   // @event
@@ -174,22 +172,22 @@ pub enum TreeKind {
     ParsedName,
 
     // Property expressions
-    PropertyExpr,
-    PropLet,
-    PropBinder,
-    PropLam,
-    PropApp,
-    PropList,
-    PropDefProperty,
+    // PropertyExpr,
+    // PropLet,
+    // PropBinder,
+    // PropLam,
+    // PropApp,
+    // PropList,
+    // PropDefProperty,
 
     // Special functions we intend to format differently
-    WithCapability,
-    WithRead,
-    WithDefaultRead,
-    Enforce,
-    If,
-    Cond,
-    Do,
+    // WithCapability,
+    // WithRead,
+    // WithDefaultRead,
+    // Enforce,
+    // If,
+    // Cond,
+    // Do,
 
     // Error node
     ErrorTree,
@@ -202,7 +200,7 @@ pub struct Tree {
 }
 
 impl Tree {
-    pub fn has_errors(self: &Self) -> bool {
+    pub fn has_errors(&self) -> bool {
         if self.kind == TreeKind::ErrorTree {
             return true;
         }
