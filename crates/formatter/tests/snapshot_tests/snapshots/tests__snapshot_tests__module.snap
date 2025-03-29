@@ -4,4 +4,9 @@ expression: "format_source(content, 60)"
 ---
 (module name GOVERNANCE
   (defcap GOVERNANCE () true)
+  (defun ;huh
+    my-fn
+    (a b)
+    (+ a b)
+  )
 )
