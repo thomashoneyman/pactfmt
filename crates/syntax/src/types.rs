@@ -39,7 +39,7 @@ pub struct SourceToken {
 /// https://github.com/kadena-io/pact-5/blob/master/pact/Pact/Core/Syntax/Lexer.x
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenKind {
-    // Keywords
+    // Reserved keywords
     LetKeyword,
     LetStarKeyword,
     LambdaKeyword,
@@ -50,50 +50,48 @@ pub enum TokenKind {
     ImplementsKeyword,
     StepKeyword,
     StepWithRollbackKeyword,
-
-    // Definition keywords
     DefunKeyword,
     DefConstKeyword,
     DefCapKeyword,
     DefPactKeyword,
     DefSchemaKeyword,
     DefTableKeyword,
-
-    // Annotations
     DocAnnKeyword,     // @doc
     ModelAnnKeyword,   // @model
     EventAnnKeyword,   // @event
     ManagedAnnKeyword, // @managed
 
-    // Boolean literals
-    TrueKeyword,
-    FalseKeyword,
-
-    // Delimiters
+    // Syntax
     OpenParen,    // (
     CloseParen,   // )
     OpenBrace,    // {
     CloseBrace,   // }
     OpenBracket,  // [
     CloseBracket, // ]
-
-    // Operators and punctuation
     Comma,
     Colon,
     Dot,
     BindAssign, // :=
     DynAcc,     // ::
 
-    // Literals and identifiers
+    // Literals
     Ident,
     Number,
     StringLit,
     SingleTick,
+    True,
+    False,
 
-    // End of file
+    // Keywords not reserved in the Pact lexer, but reserved in the parser
+    ExpectTypechecksKeyword,       // expect-typechecks
+    ExpectTypecheckFailureKeyword, // expect-typecheck-failure
+    WithCapabilityKeyword,         // with-capability
+    CreateUserGuardKeyword,        // create-user-guard
+    EnforceKeyword,                // enforce
+    EnforceOneKeyword,             // enforce-one
+
+    // Special tokens
     Eof,
-
-    // Special token for errors in the lexer
     Error,
 }
 

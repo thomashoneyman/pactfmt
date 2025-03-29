@@ -244,8 +244,14 @@ impl<'a> Lexer<'a> {
                     "defpact" => TokenKind::DefPactKeyword,
                     "defschema" => TokenKind::DefSchemaKeyword,
                     "deftable" => TokenKind::DefTableKeyword,
-                    "true" => TokenKind::TrueKeyword,
-                    "false" => TokenKind::FalseKeyword,
+                    "true" => TokenKind::True,
+                    "false" => TokenKind::False,
+                    "expect-typechecks" => TokenKind::ExpectTypechecksKeyword,
+                    "expect-typecheck-failure" => TokenKind::ExpectTypecheckFailureKeyword,
+                    "with-capability" => TokenKind::WithCapabilityKeyword,
+                    "create-user-guard" => TokenKind::CreateUserGuardKeyword,
+                    "enforce" => TokenKind::EnforceKeyword,
+                    "enforce-one" => TokenKind::EnforceOneKeyword,
                     _ => TokenKind::Ident,
                 }
             }
