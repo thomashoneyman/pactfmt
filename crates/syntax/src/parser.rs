@@ -50,7 +50,7 @@ impl Parser {
     }
 
     fn eof(&self) -> bool {
-        self.pos == self.tokens.len()
+        self.at(TokenKind::Eof)
     }
 
     fn nth(&self, lookahead: usize) -> TokenKind {
@@ -98,7 +98,7 @@ impl Parser {
         let mut events = self.events;
         let mut stack = Vec::new();
 
-        // Special case: pop the last `Close` event to ensure
+        // Special case: pop the last Close event to ensure
         // the stack is non-empty within the loop.
         assert!(matches!(events.pop(), Some(Event::Close)));
 
@@ -129,21 +129,15 @@ impl Parser {
         // Parser will guarantee all trees are closed and cover the entirety
         // of the token stream.
         assert!(stack.len() == 1);
-        assert!(tokens.next().is_none());
+        assert!(matches!(
+            tokens.next(),
+            Some(SourceToken {
+                kind: TokenKind::Eof,
+                ..
+            }) | None
+        ));
 
-        let mut result = stack.pop().unwrap();
-
-        // Remove final EOF error node if present
-        if let Some(Child::Tree(tree)) = result.children.last() {
-            if tree.kind == TreeKind::ErrorTree
-                && tree.children.len() == 1
-                && matches!(tree.children.first(), Some(Child::Token(token)) if token.kind == TokenKind::Eof)
-            {
-                result.children.pop();
-            }
-        }
-
-        result
+        stack.pop().unwrap()
     }
 }
 
@@ -155,7 +149,6 @@ pub fn parse(tokens: Vec<SourceToken>) -> Tree {
         fuel: Cell::new(256),
         events: Vec::new(),
     };
-
     file(&mut p);
     p.build_tree()
 }
@@ -169,25 +162,23 @@ fn file(p: &mut Parser) {
     p.close(m, TreeKind::File);
 }
 
-/// TopLevel = Module | Interface | Use | Expr
 fn top_level(p: &mut Parser) {
     if p.at(TokenKind::OpenParen) {
         match p.nth(1) {
             TokenKind::ModuleKeyword => module(p),
             TokenKind::InterfaceKeyword => todo!("interface parser"),
             TokenKind::ImportKeyword => todo!("import parser"),
-            _ => todo!("expr parser"),
+            _ => expr(p),
         }
-    } else if p.at(TokenKind::OpenBracket) {
-        number_list(p);
     } else {
-        p.advance_with_error("expected open paren, number, or top-level construct");
+        expr(p);
     }
 }
 
-/// Module = '(' 'module' name:Ident gov:Governance Documentation? (ExternalDecl | Def)* ')'
 fn module(p: &mut Parser) {
+    assert!(p.at(TokenKind::OpenParen));
     let m = p.open();
+
     p.expect(TokenKind::OpenParen);
     p.expect(TokenKind::ModuleKeyword);
     p.expect(TokenKind::Ident);
@@ -198,28 +189,202 @@ fn module(p: &mut Parser) {
     p.close(m, TreeKind::Module);
 }
 
-/// Governance = String | Symbol | Ident
 fn governance(p: &mut Parser) {
     match p.nth(0) {
-        TokenKind::StringLit | TokenKind::SingleTick | TokenKind::Ident => p.advance(),
+        TokenKind::String | TokenKind::Symbol | TokenKind::Ident => p.advance(),
         _ => p.advance_with_error("expected string, symbol, or capability name for governance"),
     }
 }
 
-// FIXME: Temporary, for verifying parser integration test
-fn number_list(p: &mut Parser) {
+fn expr(p: &mut Parser) {
+    match p.nth(0) {
+        TokenKind::Bool | TokenKind::String | TokenKind::Symbol | TokenKind::Ident => p.advance(),
+        TokenKind::Number => expr_number(p),
+        TokenKind::OpenBracket => expr_list(p),
+        TokenKind::OpenBrace => match p.nth(2) {
+            TokenKind::Colon => expr_object(p),
+            TokenKind::BindAssign => expr_binding(p),
+            _ => p.advance_with_error("Expected object or binding"),
+        },
+        TokenKind::OpenParen => match p.nth(1) {
+            TokenKind::LetKeyword | TokenKind::LetStarKeyword => expr_let(p),
+            TokenKind::LambdaKeyword => expr_lambda(p),
+            TokenKind::Ident => expr_app(p),
+            _ => p.advance_with_error("Expected let, app, or lambda"),
+        },
+        _ => p.advance_with_error("Expected literal, '[', or '(' in expr"),
+    }
+}
+
+fn expr_let(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    match p.nth(0) {
+        TokenKind::LetKeyword | TokenKind::LetStarKeyword => {
+            p.advance();
+        }
+        _ => p.advance_with_error("expected 'let' or 'let*' in let binding"),
+    }
+
+    p.expect(TokenKind::OpenParen);
+    while !p.at(TokenKind::CloseParen) && !p.eof() {
+        if p.at(TokenKind::OpenParen) {
+            let_binder(p);
+        } else {
+            p.advance_with_error("expected a valid binder");
+        }
+    }
+    p.expect(TokenKind::CloseParen);
+
+    expr(p);
+
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::Let)
+}
+
+fn let_binder(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::Ident);
+    if p.at(TokenKind::Colon) {
+        todo!("parse types...");
+    }
+    expr(p);
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::Binder);
+}
+
+fn expr_lambda(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::LambdaKeyword);
+    param_list(p);
+    expr(p);
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::Lambda);
+}
+
+fn expr_app(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::Ident);
+    while !p.at(TokenKind::CloseParen) && !p.eof() {
+        expr(p);
+    }
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::App);
+}
+
+fn expr_list(p: &mut Parser) {
     let m = p.open();
     p.expect(TokenKind::OpenBracket);
-    while !p.at(TokenKind::CloseBracket) {
-        if p.at(TokenKind::Number) {
+    while !p.at(TokenKind::CloseBracket) && !p.eof() {
+        expr(p);
+        if p.at(TokenKind::Comma) {
             p.advance();
-            if p.at(TokenKind::Comma) {
-                p.advance();
-            }
-        } else {
-            p.advance_with_error("expected number or closing bracket");
         }
     }
     p.expect(TokenKind::CloseBracket);
     p.close(m, TreeKind::List);
+}
+
+fn expr_object(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenBrace);
+    while !p.at(TokenKind::CloseBrace) && !p.eof() {
+        if p.at(TokenKind::String) || p.at(TokenKind::Symbol) {
+            p.advance();
+            p.expect(TokenKind::Colon);
+            expr(p);
+            if p.nth(1) != TokenKind::CloseBrace {
+                p.expect(TokenKind::Comma);
+            }
+        } else {
+            p.advance_with_error("Expected string or symbol in object")
+        }
+    }
+    p.expect(TokenKind::CloseBrace);
+    p.close(m, TreeKind::Object);
+}
+
+fn expr_binding(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenBrace);
+    while !p.at(TokenKind::CloseBrace) && !p.eof() {
+        if p.at(TokenKind::String) || p.at(TokenKind::Symbol) {
+            p.advance();
+            p.expect(TokenKind::BindAssign);
+            p.expect(TokenKind::Ident);
+            if p.at(TokenKind::Colon) {
+                todo!("parse types...");
+            }
+            if p.nth(1) != TokenKind::CloseBrace {
+                p.expect(TokenKind::Comma);
+            }
+        } else {
+            p.advance_with_error("Expected string or symbol in binding")
+        }
+    }
+    p.expect(TokenKind::CloseBrace);
+    p.close(m, TreeKind::Binding);
+}
+
+fn expr_number(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::Number);
+
+    let mut decimal_seen = false;
+    while p.at(TokenKind::Dot) {
+        if decimal_seen {
+            p.advance_with_error("Invalid number format: multiple decimal points");
+        } else {
+            decimal_seen = true;
+            p.advance();
+
+            if !p.at(TokenKind::Number) {
+                p.advance_with_error("Decimal point must be followed by digits");
+                break;
+            }
+
+            p.advance();
+        }
+    }
+
+    let kind = if decimal_seen {
+        TreeKind::DecimalLiteral
+    } else {
+        TreeKind::IntLiteral
+    };
+
+    p.close(m, kind);
+}
+
+fn param_list(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    while !p.at(TokenKind::CloseParen) && !p.eof() {
+        p.expect(TokenKind::Ident);
+        if p.at(TokenKind::Colon) {
+            todo!("parse types...");
+        }
+    }
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::ParamList);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::lexer::tokenize;
+
+    #[test]
+    fn parser_debug() {
+        let input = r#"
+            (+ -1.23 { 'a: 1.001 })
+            (lambda (a b) (+ a b))
+        "#;
+        let tokens = tokenize(input);
+        let parsed = parse(tokens);
+        assert!(!&parsed.has_errors(), "Tree has errors {:?}", parsed);
+    }
 }

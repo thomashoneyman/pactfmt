@@ -126,10 +126,9 @@ fn format_tokens_for_comparison(tokens: &[SourceToken]) -> Vec<String> {
             // Literals
             TokenKind::Ident => format!("ident<{}>", token.text),
             TokenKind::Number => format!("number<{}>", token.text),
-            TokenKind::StringLit => format!("\"{}\"", token.text.trim_matches('"')),
-            TokenKind::SingleTick => format!("'{}", token.text.trim_start_matches('\'')),
-            TokenKind::True => "true".to_string(),
-            TokenKind::False => "false".to_string(),
+            TokenKind::String => format!("\"{}\"", token.text.trim_matches('"')),
+            TokenKind::Symbol => format!("'{}", token.text.trim_start_matches('\'')),
+            TokenKind::Bool => token.text.clone(),
 
             // Keywords not reserved in the Pact lexer, but reserved in the parser
             TokenKind::WithCapabilityKeyword => "ident<with-capability>".to_string(),

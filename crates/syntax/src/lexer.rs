@@ -204,14 +204,14 @@ impl<'a> Lexer<'a> {
                 let string_content = self.scan_string_content();
                 text.push_str(&string_content);
                 text.push('"'); // Add the closing quote to the text
-                TokenKind::StringLit
+                TokenKind::String
             }
             '\'' => {
                 text.push(current);
                 self.advance();
-                let tick_content = self.scan_single_tick_content();
+                let tick_content = self.scan_symbol_content();
                 text.push_str(&tick_content);
-                TokenKind::SingleTick
+                TokenKind::Symbol
             }
             ch if Self::is_digit(ch) || (ch == '-' && self.peek().is_some_and(Self::is_digit)) => {
                 text.push(ch);
@@ -244,8 +244,7 @@ impl<'a> Lexer<'a> {
                     "defpact" => TokenKind::DefPactKeyword,
                     "defschema" => TokenKind::DefSchemaKeyword,
                     "deftable" => TokenKind::DefTableKeyword,
-                    "true" => TokenKind::True,
-                    "false" => TokenKind::False,
+                    "true" | "false" => TokenKind::Bool,
                     // Reserved in the parser, but not in the lexer
                     "with-capability" => TokenKind::WithCapabilityKeyword,
                     "with-read" => TokenKind::WithReadKeyword,
@@ -355,7 +354,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Scan single tick content
-    fn scan_single_tick_content(&mut self) -> String {
+    fn scan_symbol_content(&mut self) -> String {
         let mut result = String::new();
 
         // First character should be alphabetic
