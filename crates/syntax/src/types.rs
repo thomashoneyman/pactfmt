@@ -87,13 +87,13 @@ pub enum TokenKind {
 
     // Keywords not reserved in the Pact lexer, but which we expect
     // to provide different formatting.
-    WithCapabilityKeyword,        // with-capability
-    WithReadKeyword,              // with-read
-    WithDefaultReadKeyword,       // with-default-read
-    EnforceKeyword,               // enforce
-    IfKeyword,                    // if
-    CondKeyword,                  // cond
-    DoKeyword,                    // do
+    WithCapabilityKeyword,  // with-capability
+    WithReadKeyword,        // with-read
+    WithDefaultReadKeyword, // with-default-read
+    EnforceKeyword,         // enforce
+    IfKeyword,              // if
+    CondKeyword,            // cond
+    DoKeyword,              // do
 
     // Special tokens
     Eof,
