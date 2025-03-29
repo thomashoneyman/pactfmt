@@ -11,7 +11,7 @@ pub fn lower_child(child: Child) -> FST {
         Child::Token(token) => FST::Literal(token),
         Child::Tree(tree) => match tree.kind {
             TreeKind::Module => lower_module(&tree),
-            TreeKind::ListLiteral => lower_list(&tree),
+            TreeKind::List => lower_list(&tree),
             _ => panic!("Unsupported tree kind: {:?}", tree.kind),
         },
     }

@@ -35,11 +35,14 @@ pub struct SourceToken {
     pub trailing: Vec<Trivia>, // Whitespace/comments after this token
 }
 
-/// Token kinds for the Pact language lexer
+/// Tokens, enumerated from the Pact lexer:
 /// https://github.com/kadena-io/pact-5/blob/master/pact/Pact/Core/Syntax/Lexer.x
+/// and the Pact parser:
+/// https://github.com/kadena-io/pact-5/blob/master/pact/Pact/Core/Syntax/Parser.y
+/// as well as the Pact ungrammar in reference/pact.ungram.
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TokenKind {
-    // Keywords
+    // Reserved keywords
     LetKeyword,
     LetStarKeyword,
     LambdaKeyword,
@@ -50,91 +53,149 @@ pub enum TokenKind {
     ImplementsKeyword,
     StepKeyword,
     StepWithRollbackKeyword,
-
-    // Definition keywords
     DefunKeyword,
     DefConstKeyword,
     DefCapKeyword,
     DefPactKeyword,
     DefSchemaKeyword,
     DefTableKeyword,
-
-    // Annotations
     DocAnnKeyword,     // @doc
     ModelAnnKeyword,   // @model
     EventAnnKeyword,   // @event
     ManagedAnnKeyword, // @managed
 
-    // Boolean literals
-    TrueKeyword,
-    FalseKeyword,
-
-    // Delimiters
+    // Syntax
     OpenParen,    // (
     CloseParen,   // )
     OpenBrace,    // {
     CloseBrace,   // }
     OpenBracket,  // [
     CloseBracket, // ]
-
-    // Operators and punctuation
     Comma,
     Colon,
     Dot,
     BindAssign, // :=
     DynAcc,     // ::
 
-    // Literals and identifiers
+    // Literals
     Ident,
     Number,
     StringLit,
     SingleTick,
+    True,
+    False,
 
-    // End of file
+    // Keywords not reserved in the Pact lexer, but which we expect
+    // to provide different formatting.
+    WithCapabilityKeyword,  // with-capability
+    WithReadKeyword,        // with-read
+    WithDefaultReadKeyword, // with-default-read
+    EnforceKeyword,         // enforce
+    IfKeyword,              // if
+    CondKeyword,            // cond
+    DoKeyword,              // do
+
+    // Special tokens
     Eof,
-
-    // Special token for errors in the lexer
     Error,
 }
 
-/// Tree kinds for syntax nodes in the Pact CST; these trees are simplified
-/// for formatting, but can be extended to cover more cases later.
+/// Tree kinds for the Pact CST, derived from the Pact ungrammar in
+/// reference/pact.ungram.
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TreeKind {
+    // Top-level structure
     File,
+    TopLevel,
 
-    // Top-level constructs
+    // Module and interface structures
     Module,
     Interface,
-    Import,
-    Expr,
+    Governance,
+    Documentation,
+    DocAnnotation,
+    ModelAnnotation,
+
+    // External declarations
+    ExternalDecl,
+    Use,
+    ImportList,
+    Implements,
+    Bless,
 
     // Definitions
+    Def,
+    ParamList,
     Defun,
     Defconst,
     Defcap,
-    Defpact,
     Defschema,
     Deftable,
+    Defpact,
 
-    // Exprs
-    Literal,
-    ListLiteral,
-    ObjectLiteral,
-    BindLiteral,
+    // Pact steps
+    Step,
+    StepWithRollback,
+
+    // Interface definitions (consts, schemas are the same as normal defs)
+    IfDef,
+    IfDefun,
+    IfDefcap,
+    IfDefpact,
+
+    // Capability metadata
+    CapabilityMeta,
+
+    // Parameters and fields
+    Param,
+    SchemaField,
+
+    // Type system
+    TypeAnn,
+    Type,
+    PrimType,
+
+    // Expressions
     Let,
-    Lambda,
+    Binder,
+    Lam,
+    App,
+    Binding,
+    List,
+    Object,
+    FieldPair,
+    BindPair,
+
+    // Literals
+    Literal,
+    StringLiteral,
+    SymbolLiteral,
+    IntLiteral,
+    DecimalLiteral,
+    BoolLiteral,
 
     // Names
     Name,
-    TypeAnnotation,
-    QualifiedName,
+    ModRef,
+    ParsedName,
 
-    // Annotations
-    DocAnnotation,
-    ModelAnnotation,
-    EventAnnotation,
-    ManagedAnnotation,
+    // Property expressions
+    PropertyExpr,
+    PropLet,
+    PropBinder,
+    PropLam,
+    PropApp,
+    PropList,
+    PropDefProperty,
+
+    // Special functions we intend to format differently
+    WithCapability,
+    WithRead,
+    WithDefaultRead,
+    Enforce,
+    If,
+    Cond,
+    Do,
 
     // Error node
     ErrorTree,

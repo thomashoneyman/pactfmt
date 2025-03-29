@@ -221,5 +221,5 @@ fn number_list(p: &mut Parser) {
         }
     }
     p.expect(TokenKind::CloseBracket);
-    p.close(m, TreeKind::ListLiteral);
+    p.close(m, TreeKind::List);
 }

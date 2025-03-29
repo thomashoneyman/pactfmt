@@ -244,8 +244,16 @@ impl<'a> Lexer<'a> {
                     "defpact" => TokenKind::DefPactKeyword,
                     "defschema" => TokenKind::DefSchemaKeyword,
                     "deftable" => TokenKind::DefTableKeyword,
-                    "true" => TokenKind::TrueKeyword,
-                    "false" => TokenKind::FalseKeyword,
+                    "true" => TokenKind::True,
+                    "false" => TokenKind::False,
+                    // Reserved in the parser, but not in the lexer
+                    "with-capability" => TokenKind::WithCapabilityKeyword,
+                    "with-read" => TokenKind::WithReadKeyword,
+                    "with-default-read" => TokenKind::WithDefaultReadKeyword,
+                    "enforce" => TokenKind::EnforceKeyword,
+                    "if" => TokenKind::IfKeyword,
+                    "cond" => TokenKind::CondKeyword,
+                    "do" => TokenKind::DoKeyword,
                     _ => TokenKind::Ident,
                 }
             }
