@@ -163,9 +163,9 @@ Expr =
 | Binding
 
 // Let binding - local variable definitions
-Let = '(' ('let' | 'let*') '(' Binder* ')' Expr* ')'
+Let = '(' ('let' | 'let*') '(' LetBinder* ')' Expr* ')'
 
-Binder = '(' name:'ident' TypeAnn? value:Expr ')'
+LetBinder = '(' name:'ident' TypeAnn? value:Expr ')'
 
 // Lambda expression - anonymous function
 Lam = '(' 'lambda' ParamList Expr* ')'
@@ -258,4 +258,3 @@ PropList = '[' items:PropertyExpr* ']'
 // Unlike defun, args are entirely optional and no parens are needed; also,
 // the body is a single expression.
 PropDefProperty = '(' 'defproperty' name:'ident' args:ParamList? body:PropertyExpr ')'
-

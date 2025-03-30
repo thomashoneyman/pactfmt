@@ -1,6 +1,3 @@
-/// CST types, inspired by
-/// https://matklad.github.io/2023/05/21/resilient-ll-parsing-tutorial.html
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct SourcePos {
     pub line: usize,
@@ -48,17 +45,17 @@ pub enum TokenKind {
     LambdaKeyword,
     ModuleKeyword,
     InterfaceKeyword,
-    ImportKeyword, // 'use' keyword
+    ImportKeyword, // use keyword
     BlessKeyword,
     ImplementsKeyword,
     StepKeyword,
     StepWithRollbackKeyword,
     DefunKeyword,
-    DefConstKeyword,
-    DefCapKeyword,
-    DefPactKeyword,
-    DefSchemaKeyword,
-    DefTableKeyword,
+    DefconstKeyword,
+    DefcapKeyword,
+    DefpactKeyword,
+    DefschemaKeyword,
+    DeftableKeyword,
     DocAnnKeyword,     // @doc
     ModelAnnKeyword,   // @model
     EventAnnKeyword,   // @event
@@ -80,10 +77,9 @@ pub enum TokenKind {
     // Literals
     Ident,
     Number,
-    StringLit,
-    SingleTick,
-    True,
-    False,
+    String,
+    Symbol,
+    Bool,
 
     // Keywords not reserved in the Pact lexer, but which we expect
     // to provide different formatting.
@@ -105,7 +101,6 @@ pub enum TokenKind {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TreeKind {
     // Top-level structure
-    File,
     TopLevel,
 
     // Module and interface structures
@@ -158,7 +153,7 @@ pub enum TreeKind {
     // Expressions
     Let,
     Binder,
-    Lam,
+    Lambda,
     App,
     Binding,
     List,
@@ -167,35 +162,30 @@ pub enum TreeKind {
     BindPair,
 
     // Literals
-    Literal,
-    StringLiteral,
-    SymbolLiteral,
     IntLiteral,
     DecimalLiteral,
-    BoolLiteral,
 
     // Names
     Name,
     ModRef,
-    ParsedName,
 
     // Property expressions
-    PropertyExpr,
-    PropLet,
-    PropBinder,
-    PropLam,
-    PropApp,
-    PropList,
-    PropDefProperty,
+    // PropertyExpr,
+    // PropLet,
+    // PropBinder,
+    // PropLam,
+    // PropApp,
+    // PropList,
+    // PropDefProperty,
 
     // Special functions we intend to format differently
-    WithCapability,
-    WithRead,
-    WithDefaultRead,
-    Enforce,
-    If,
-    Cond,
-    Do,
+    // WithCapability,
+    // WithRead,
+    // WithDefaultRead,
+    // Enforce,
+    // If,
+    // Cond,
+    // Do,
 
     // Error node
     ErrorTree,
@@ -205,6 +195,24 @@ pub enum TreeKind {
 pub struct Tree {
     pub kind: TreeKind,
     pub children: Vec<Child>,
+}
+
+impl Tree {
+    pub fn has_errors(&self) -> bool {
+        if self.kind == TreeKind::ErrorTree {
+            return true;
+        }
+
+        for child in &self.children {
+            if let Child::Tree(subtree) = child {
+                if subtree.has_errors() {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

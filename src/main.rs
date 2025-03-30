@@ -37,7 +37,7 @@ fn main() -> io::Result<()> {
                     buffer
                 }
             };
-            if check_source(&content) {
+            if check_source(&content, 80) {
                 println!("Syntax OK");
             } else {
                 eprintln!("Syntax Error");
@@ -56,7 +56,13 @@ fn main() -> io::Result<()> {
             };
 
             let formatted = format_source(&content, 80);
-            println!("{}", formatted);
+            match formatted {
+                Ok(formatted) => println!("{}", formatted),
+                Err(err) => {
+                    eprintln!("Error: {}", err);
+                    std::process::exit(1);
+                }
+            }
             Ok(())
         }
         _ => {

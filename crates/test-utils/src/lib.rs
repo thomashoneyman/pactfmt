@@ -50,17 +50,14 @@ pub fn find_pact_files(dir: &str) -> Vec<PathBuf> {
 /// Read a .pact file and return its content as a flattened string
 pub fn flatten_pact_file(file: &PathBuf) -> String {
     let content = std::fs::read_to_string(&file).expect("Failed to read file content");
-    if content.contains(";") {
-        panic!(
-            "Comments are not allowed in integration test files due to flattening: {}",
-            file.display()
-        );
-    }
     flatten_pact_string(&content)
 }
 
 /// Flatten a Pact string by replacing newlines with spaces and joining whitespace
 pub fn flatten_pact_string(input: &str) -> String {
+    if input.contains(";") {
+        panic!("Comments are not allowed in integration test files due to flattening");
+    }
     input
         .replace('\n', " ")
         .split_whitespace()
