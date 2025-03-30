@@ -77,7 +77,7 @@ impl FST {
                 }
 
                 result.group()
-            },
+            }
 
             FST::List(Wrapped { open, inner, close }) => {
                 let mut result = FormatDoc::nil(allocator);

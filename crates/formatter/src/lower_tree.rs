@@ -192,7 +192,8 @@ fn extract_all_tokens(tree: &Tree) -> Vec<SourceToken> {
 
 // Find the index of the parameter list, e.g. in a defun or defcap
 fn find_param_list_index(tree: &Tree) -> usize {
-    tree.children.iter()
+    tree.children
+        .iter()
         .position(|child| matches!(child, Child::Tree(t) if t.kind == TreeKind::ParamList))
         .expect("Expected parameter list but none found.")
 }
