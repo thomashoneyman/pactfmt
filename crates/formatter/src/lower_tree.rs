@@ -1,29 +1,151 @@
-use syntax::types::{Child, Tree, TreeKind};
+use syntax::types::{Child, SourceToken, Tree, TreeKind, TokenKind};
 
 use crate::format_tree::{ListItem, SpecialForm, Wrapped, FST};
 
+/// Lower a parsed tree into a format syntax tree suitable for
+/// use with format_source and other formatting functions.
 pub fn lower_tree(tree: Tree) -> FST {
     match tree.kind {
         // Toplevel
-        TreeKind::Module => lower_module(&tree),
+        TreeKind::Module => special_form(&tree, 4),
 
         // Defs
-        TreeKind::Defun => lower_defun(&tree),
-        TreeKind::Defcap => lower_defcap(&tree),
+        TreeKind::Defun => special_form(&tree, 4),
+        TreeKind::Defcap => special_form(&tree, 4),
 
         // Exprs
-        TreeKind::App => lower_app(&tree),
-        TreeKind::List => lower_list(&tree),
-        TreeKind::IntLiteral => lower_int(&tree),
-        TreeKind::DecimalLiteral => lower_decimal(&tree),
+        TreeKind::App => sexp(&tree, 1),
+        TreeKind::List => bracket_list(&tree),
+
+        // Literals
+        TreeKind::IntLiteral => literal(&tree, "integer"),
+        TreeKind::DecimalLiteral => literal(&tree, "decimal"),
 
         // Other
-        TreeKind::ParamList => lower_param_list(&tree),
+        TreeKind::ParamList => paren_list(&tree),
 
         _ => panic!("Unsupported tree kind: {:?}", tree.kind),
     }
 }
 
+fn bracket_list(tree: &Tree) -> FST {
+    list(tree, "bracket", true)
+}
+
+fn paren_list(tree: &Tree) -> FST {
+    list(tree, "paren", false)
+}
+
+fn list(tree: &Tree, delim_desc: &str, allow_commas: bool) -> FST {
+    if !allow_commas {
+        let items = lower_children(tree, 1, 1);
+        FST::List(Wrapped {
+            open: open_token(tree, &format!("open {}", delim_desc)),
+            inner: items
+                .into_iter()
+                .map(|item| ListItem {
+                    value: item,
+                    comma: None,
+                })
+                .collect(),
+            close: close_token(tree, &format!("close {}", delim_desc)),
+        })
+    } else {
+        let mut items = Vec::new();
+        let mut current_item: Option<ListItem> = None;
+
+        for i in 1..tree.children.len() - 1 {
+            match &tree.children[i] {
+                Child::Token(token) if token.kind == TokenKind::Comma => {
+                    if let Some(item) = current_item.take() {
+                        items.push(ListItem {
+                            value: item.value,
+                            comma: Some(token.clone()),
+                        });
+                    } else {
+                        panic!("Found comma with no preceding list item");
+                    }
+                }
+                child => {
+                    if let Some(item) = current_item.take() {
+                        items.push(item);
+                    }
+
+                    current_item = Some(ListItem {
+                        value: lower_child(child.clone()),
+                        comma: None,
+                    });
+                }
+            }
+        }
+
+        if let Some(item) = current_item {
+            items.push(item);
+        }
+
+        FST::List(Wrapped {
+            open: open_token(tree, &format!("open {}", delim_desc)),
+            inner: items,
+            close: close_token(tree, &format!("close {}", delim_desc)),
+        })
+    }
+}
+
+// Extract opening token (always first child)
+fn open_token(tree: &Tree, desc: &str) -> SourceToken {
+    extract_token(&tree.children[0], desc)
+}
+
+// Extract closing token (always last child)
+fn close_token(tree: &Tree, desc: &str) -> SourceToken {
+    extract_token(&tree.children[tree.children.len() - 1], desc)
+}
+
+// Process children in a range
+fn lower_children(tree: &Tree, start: usize, end: usize) -> Vec<FST> {
+    tree.children[start..tree.children.len() - end]
+        .iter()
+        .map(|child| lower_child(child.clone()))
+        .collect()
+}
+
+fn extract_children(tree: &Tree, desc: &str) -> Vec<SourceToken> {
+    tree.children.iter()
+        .map(|child| extract_token(child, desc))
+        .collect()
+}
+
+// Helper for creating s-expressions
+fn sexp(tree: &Tree, start: usize) -> FST {
+    FST::SExp(Wrapped {
+        open: open_token(tree, "open paren"),
+        inner: lower_children(tree, start, 1),
+        close: close_token(tree, "close paren"),
+    })
+}
+
+// Helper function to create special forms with less boilerplate
+fn special_form(
+    tree: &Tree,
+    body_start: usize,
+) -> FST {
+    let sections = tree.children[2..body_start]
+        .iter()
+        .map(|child| lower_child(child.clone()))
+        .collect();
+
+    FST::SpecialForm(Wrapped {
+        open: open_token(tree, "open paren"),
+        inner: SpecialForm {
+            keyword: extract_token(&tree.children[1], "keyword"),
+            sections,
+            body: lower_children(tree, body_start, 1),
+        },
+        close: close_token(tree, "close paren"),
+    })
+}
+
+// Helper function to lower a child to an FST
 pub fn lower_child(child: Child) -> FST {
     match child {
         Child::Tree(tree) => lower_tree(tree),
@@ -31,179 +153,40 @@ pub fn lower_child(child: Child) -> FST {
     }
 }
 
-fn lower_module(tree: &Tree) -> FST {
-    let body_items: Vec<FST> = tree.children[4..tree.children.len() - 1]
-        .iter()
-        .map(|child| lower_child(child.clone()))
-        .collect();
-
-    FST::SpecialForm(Wrapped {
-        open: extract_token(&tree.children[0], "open paren"),
-        inner: SpecialForm {
-            keyword: extract_token(&tree.children[1], "module keyword"),
-            sections: vec![
-                FST::Literal(extract_token(&tree.children[2], "name")),
-                FST::Literal(extract_token(&tree.children[3], "governance")),
-            ],
-            body: body_items,
-        },
-        close: extract_token(&tree.children[tree.children.len() - 1], "close paren"),
-    })
-}
-
-fn extract_token(child: &Child, expected: &str) -> syntax::types::SourceToken {
+// Helper function to extract a token from a child
+fn extract_token(child: &Child, expected: &str) -> SourceToken {
     match child {
         Child::Token(token) => token.clone(),
         _ => panic!("Expected token for {}", expected),
     }
 }
 
-fn lower_list(tree: &Tree) -> FST {
-    let mut items = Vec::new();
-    let mut current_item: Option<ListItem> = None;
-
-    for i in 1..tree.children.len() - 1 {
-        match &tree.children[i] {
-            Child::Token(token) if token.text == "," => {
-                if let Some(item) = current_item.take() {
-                    items.push(ListItem {
-                        value: item.value,
-                        comma: Some(token.clone()),
-                    });
-                } else {
-                    panic!("Found comma with no preceding list item");
-                }
-            }
-            child => {
-                if let Some(item) = current_item.take() {
-                    items.push(item);
-                }
-
-                current_item = Some(ListItem {
-                    value: lower_child(child.clone()),
-                    comma: None,
-                });
-            }
-        }
+// Helper function to create a literal from a token
+fn literal(tree: &Tree, desc: &str) -> FST {
+    if tree.children.len() == 1 {
+        FST::Literal(open_token(tree, desc))
+    } else {
+        literal_tokens(&extract_children(tree, desc))
     }
-
-    if let Some(item) = current_item {
-        items.push(item);
-    }
-
-    FST::List(Wrapped {
-        open: extract_token(&tree.children[0], "open bracket"),
-        inner: items,
-        close: extract_token(&tree.children[tree.children.len() - 1], "close bracket"),
-    })
 }
 
-fn lower_int(tree: &Tree) -> FST {
-    // IntLiteral trees should contain a single Number token
-    if tree.children.len() != 1 {
-        panic!("IntLiteral should have exactly one child");
-    }
-    FST::Literal(extract_token(&tree.children[0], "integer"))
-}
-
-fn lower_decimal(tree: &Tree) -> FST {
-    if tree.children.len() < 3 {
-        panic!("DecimalLiteral should have at least 3 children");
+// Helper function to create simple literals from tokens
+fn literal_tokens(tokens: &[SourceToken]) -> FST {
+    if tokens.is_empty() {
+        panic!("Cannot create literal from empty tokens");
     }
 
-    let first_token = extract_token(&tree.children[0], "decimal integer part");
-    let last_token = extract_token(
-        &tree.children[tree.children.len() - 1],
-        "decimal fractional part",
-    );
+    let first = &tokens[0];
+    let last = &tokens[tokens.len() - 1];
 
     let mut combined_text = String::new();
-    for child in &tree.children {
-        if let Child::Token(token) = child {
-            combined_text.push_str(&token.text);
-        } else {
-            panic!("Expected token in DecimalLiteral");
-        }
+    for token in tokens {
+        combined_text.push_str(&token.text);
     }
 
-    let mut combined_token = first_token.clone();
+    let mut combined_token = first.clone();
     combined_token.text = combined_text;
-    combined_token.range.end = last_token.range.end;
+    combined_token.range.end = last.range.end.clone();
 
     FST::Literal(combined_token)
-}
-
-fn lower_defun(tree: &Tree) -> FST {
-    FST::SpecialForm(Wrapped {
-        open: extract_token(&tree.children[0], "open paren"),
-        inner: SpecialForm {
-            keyword: extract_token(&tree.children[1], "defun keyword"),
-            sections: vec![
-                FST::Literal(extract_token(&tree.children[2], "function name")),
-                lower_child(tree.children[3].clone()), // param list
-            ],
-            body: tree.children[4..tree.children.len() - 1]
-                .iter()
-                .map(|child| lower_child(child.clone()))
-                .collect(),
-        },
-        close: extract_token(&tree.children[tree.children.len() - 1], "close paren"),
-    })
-}
-
-fn lower_defcap(tree: &Tree) -> FST {
-    FST::SpecialForm(Wrapped {
-        open: extract_token(&tree.children[0], "open paren"),
-        inner: SpecialForm {
-            keyword: extract_token(&tree.children[1], "defcap keyword"),
-            sections: vec![
-                FST::Literal(extract_token(&tree.children[2], "capability name")),
-                lower_child(tree.children[3].clone()),
-            ],
-            body: tree.children[4..tree.children.len() - 1]
-                .iter()
-                .map(|child| lower_child(child.clone()))
-                .collect(),
-        },
-        close: extract_token(&tree.children[tree.children.len() - 1], "close paren"),
-    })
-}
-
-fn lower_param_list(tree: &Tree) -> FST {
-    let mut params = Vec::new();
-
-    for i in 1..tree.children.len() - 1 {
-        params.push(lower_child(tree.children[i].clone()));
-    }
-
-    FST::List(Wrapped {
-        open: extract_token(&tree.children[0], "open paren"),
-        inner: params
-            .into_iter()
-            .map(|param| ListItem {
-                value: param,
-                comma: None,
-            })
-            .collect(),
-        close: extract_token(&tree.children[tree.children.len() - 1], "close paren"),
-    })
-}
-
-fn lower_app(tree: &Tree) -> FST {
-    let func_name = extract_token(&tree.children[1], "function name");
-
-    let args: Vec<FST> = tree.children[2..tree.children.len() - 1]
-        .iter()
-        .map(|child| lower_child(child.clone()))
-        .collect();
-
-    FST::SpecialForm(Wrapped {
-        open: extract_token(&tree.children[0], "open paren"),
-        inner: SpecialForm {
-            keyword: func_name,
-            sections: vec![],
-            body: args,
-        },
-        close: extract_token(&tree.children[tree.children.len() - 1], "close paren"),
-    })
 }

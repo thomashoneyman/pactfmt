@@ -9,6 +9,8 @@ use syntax::tokenize;
 use crate::format_doc::FormatDoc;
 use crate::format_tree::FST;
 
+/// Format the input source code, returning an error if the parsed input
+/// contains any error trees.
 pub fn format_source(input: &str, width: usize) -> Result<String, String> {
     let tokens = tokenize(input);
     let parsed_trees = parse(tokens);
@@ -25,6 +27,8 @@ pub fn format_source(input: &str, width: usize) -> Result<String, String> {
     Ok(formatted)
 }
 
+/// True if the input can be formatted (no parse errors) and the formatted
+/// output is the same as the input.
 pub fn check_source(input: &str, width: usize) -> bool {
     let formatted = format_source(input, width);
     match formatted {
