@@ -10,8 +10,8 @@ pub fn lower_tree(tree: Tree) -> FST {
         TreeKind::Module => special_form(&tree, 4),
 
         // Defs
-        TreeKind::Defun => special_form(&tree, 4),
-        TreeKind::Defcap => special_form(&tree, 4),
+        TreeKind::Defun => special_form(&tree, find_param_list_index(&tree) + 1),
+        TreeKind::Defcap => special_form(&tree, find_param_list_index(&tree) + 1),
 
         // Exprs
         TreeKind::App => sexp(&tree, 1),
@@ -25,12 +25,12 @@ pub fn lower_tree(tree: Tree) -> FST {
         TreeKind::DecimalLiteral => literal(&tree, "decimal"),
 
         // Names
-        TreeKind::Name => literal_tokens(&extract_children(&tree, "name")),
-        TreeKind::ModRef => literal_tokens(&extract_children(&tree, "module reference")),
+        TreeKind::Name => compound_literal(&extract_all_tokens(&tree)),
+        TreeKind::ModRef => compound_literal(&extract_all_tokens(&tree)),
 
         // Types
-        TreeKind::TypeAnn => literal_tokens(&extract_all_tokens(&tree)),
-        TreeKind::Type => literal_tokens(&extract_all_tokens(&tree)),
+        TreeKind::TypeAnn => compound_literal(&extract_all_tokens(&tree)),
+        TreeKind::Type => compound_literal(&extract_all_tokens(&tree)),
         TreeKind::PrimType => literal(&tree, "primitive type"),
 
         _ => panic!("Unsupported tree kind: {:?}", tree.kind),
@@ -118,13 +118,6 @@ fn lower_children(tree: &Tree, start: usize, end: usize) -> Vec<FST> {
         .collect()
 }
 
-fn extract_children(tree: &Tree, desc: &str) -> Vec<SourceToken> {
-    tree.children
-        .iter()
-        .map(|child| extract_token(child, desc))
-        .collect()
-}
-
 // Helper for creating s-expressions
 fn sexp(tree: &Tree, start: usize) -> FST {
     FST::SExp(Wrapped {
@@ -173,29 +166,15 @@ fn literal(tree: &Tree, desc: &str) -> FST {
     if tree.children.len() == 1 {
         FST::Literal(open_token(tree, desc))
     } else {
-        literal_tokens(&extract_children(tree, desc))
+        compound_literal(&extract_all_tokens(tree))
     }
 }
 
-// Helper function to create simple literals from tokens
-fn literal_tokens(tokens: &[SourceToken]) -> FST {
+fn compound_literal(tokens: &[SourceToken]) -> FST {
     if tokens.is_empty() {
         panic!("Cannot create literal from empty tokens");
     }
-
-    let first = &tokens[0];
-    let last = &tokens[tokens.len() - 1];
-
-    let mut combined_text = String::new();
-    for token in tokens {
-        combined_text.push_str(&token.text);
-    }
-
-    let mut combined_token = first.clone();
-    combined_token.text = combined_text;
-    combined_token.range.end = last.range.end.clone();
-
-    FST::Literal(combined_token)
+    FST::CompoundLiteral(tokens.to_vec())
 }
 
 // Helper function to extract all tokens from a tree, recursively, essentially flattening
@@ -209,4 +188,11 @@ fn extract_all_tokens(tree: &Tree) -> Vec<SourceToken> {
         }
     }
     tokens
+}
+
+// Find the index of the parameter list, e.g. in a defun or defcap
+fn find_param_list_index(tree: &Tree) -> usize {
+    tree.children.iter()
+        .position(|child| matches!(child, Child::Tree(t) if t.kind == TreeKind::ParamList))
+        .expect("Expected parameter list but none found.")
 }

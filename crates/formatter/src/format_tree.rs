@@ -36,6 +36,7 @@ pub struct Wrapped<T> {
 #[derive(Debug, PartialEq, Clone)]
 pub enum FST {
     Literal(SourceToken),
+    CompoundLiteral(Vec<SourceToken>),
     List(Wrapped<Vec<ListItem>>),
     Object(Wrapped<Vec<ObjectItem>>),
     SExp(Wrapped<Vec<FST>>),
@@ -54,6 +55,29 @@ impl FST {
                 &token.trailing,
                 FormatDoc::text(allocator, &token.text),
             ),
+
+            FST::CompoundLiteral(tokens) => {
+                if tokens.is_empty() {
+                    return FormatDoc::nil(allocator);
+                }
+
+                let mut result = format_with_comments(
+                    &tokens[0].leading,
+                    &tokens[0].trailing,
+                    FormatDoc::text(allocator, &tokens[0].text),
+                );
+
+                for token in &tokens[1..] {
+                    let doc = format_with_comments(
+                        &token.leading,
+                        &token.trailing,
+                        FormatDoc::text(allocator, &token.text),
+                    );
+                    result = result.append(doc);
+                }
+
+                result.group()
+            },
 
             FST::List(Wrapped { open, inner, close }) => {
                 let mut result = FormatDoc::nil(allocator);

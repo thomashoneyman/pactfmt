@@ -210,13 +210,8 @@ fn defun(p: &mut Parser) {
     let m = p.open();
     p.expect(TokenKind::OpenParen);
     p.expect(TokenKind::DefunKeyword);
-    p.expect(TokenKind::Ident);
-    if p.at(TokenKind::Colon) {
-        type_annotation(p);
-    }
-
+    name(p);
     param_list(p);
-
     if p.at(TokenKind::CloseParen) {
         p.advance_with_error("function body must have at least one expression");
     } else {
@@ -224,7 +219,6 @@ fn defun(p: &mut Parser) {
             expr(p);
         }
     }
-
     p.expect(TokenKind::CloseParen);
     p.close(m, TreeKind::Defun);
 }
@@ -233,10 +227,7 @@ fn defcap(p: &mut Parser) {
     let m = p.open();
     p.expect(TokenKind::OpenParen);
     p.expect(TokenKind::DefcapKeyword);
-    p.expect(TokenKind::Ident);
-    if p.at(TokenKind::Colon) {
-        type_annotation(p);
-    }
+    name(p);
     param_list(p);
     while !p.at(TokenKind::CloseParen) && !p.eof() {
         expr(p);
@@ -293,10 +284,7 @@ fn expr_let(p: &mut Parser) {
         if p.at(TokenKind::OpenParen) {
             let m = p.open();
             p.expect(TokenKind::OpenParen);
-            p.expect(TokenKind::Ident);
-            if p.at(TokenKind::Colon) {
-                type_annotation(p);
-            }
+            name(p);
             expr(p);
             p.expect(TokenKind::CloseParen);
             p.close(m, TreeKind::Binder);
@@ -372,10 +360,7 @@ fn expr_binding(p: &mut Parser) {
         if p.at(TokenKind::String) || p.at(TokenKind::Symbol) {
             p.advance();
             p.expect(TokenKind::BindAssign);
-            p.expect(TokenKind::Ident);
-            if p.at(TokenKind::Colon) {
-                type_annotation(p);
-            }
+            name(p);
             if p.nth(1) != TokenKind::CloseBrace {
                 p.expect(TokenKind::Comma);
             }
@@ -427,11 +412,7 @@ fn param_list(p: &mut Parser) {
             p.advance_with_error("expected identifier in parameter list");
             continue;
         }
-
-        p.advance();
-        if p.at(TokenKind::Colon) {
-            type_annotation(p);
-        }
+        name(p);
     }
 
     p.expect(TokenKind::CloseParen);
@@ -527,15 +508,17 @@ fn parse_type(p: &mut Parser) {
 // Parse a simple name or qualified name (a or a.b.c)
 fn name(p: &mut Parser) {
     let name = p.open();
-
     p.expect(TokenKind::Ident);
-
-    // Handle qualified name with dots (a.b.c)
     while p.at(TokenKind::Dot) {
         p.advance();
         p.expect(TokenKind::Ident);
     }
-
+    // Include type annotation as a child of the name node if present
+    // TODO: We perhaps should provide separate name and typeable_name
+    // nodes, since types aren't allowed in all places.
+    if p.at(TokenKind::Colon) {
+        type_annotation(p);
+    }
     p.close(name, TreeKind::Name);
 }
 
