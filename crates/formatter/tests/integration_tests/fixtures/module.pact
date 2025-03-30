@@ -1,4 +1,4 @@
 (module my-mod GOV
     (defcap GOV () true)
-    (defun wot (a b) (+ 1 b))
-    (defun wot2 (a b) [1, 2, 3] [1 2]))
+    (defun wot:integer (a:string b:string) (+ 1 b))
+    (defun wot2:[[integer]] (a b) [1, 2, 3] [1 2]))

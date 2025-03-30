@@ -168,7 +168,6 @@ pub enum TreeKind {
     // Names
     Name,
     ModRef,
-    ParsedName,
 
     // Property expressions
     // PropertyExpr,

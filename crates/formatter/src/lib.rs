@@ -17,9 +17,13 @@ pub fn format_source(input: &str, width: usize) -> Result<String, String> {
     if parsed_trees.iter().any(|tree| tree.has_errors()) {
         return Err("Parse errors".to_string());
     }
-    let fst_trees: Vec<FST> = parsed_trees.into_iter().map(lower_tree::lower_tree).collect();
+    let fst_trees: Vec<FST> = parsed_trees
+        .into_iter()
+        .map(lower_tree::lower_tree)
+        .collect();
     let allocator = RcAllocator;
-    let formatted = fst_trees.iter()
+    let formatted = fst_trees
+        .iter()
         .fold(FormatDoc::nil(&allocator), |acc, fst| {
             acc.append(fst.format(&allocator))
         })

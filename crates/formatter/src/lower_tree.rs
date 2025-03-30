@@ -1,4 +1,4 @@
-use syntax::types::{Child, SourceToken, Tree, TreeKind, TokenKind};
+use syntax::types::{Child, SourceToken, TokenKind, Tree, TreeKind};
 
 use crate::format_tree::{ListItem, SpecialForm, Wrapped, FST};
 
@@ -17,12 +17,21 @@ pub fn lower_tree(tree: Tree) -> FST {
         TreeKind::App => sexp(&tree, 1),
         TreeKind::List => bracket_list(&tree),
 
+        // Expr parts
+        TreeKind::ParamList => paren_list(&tree),
+
         // Literals
         TreeKind::IntLiteral => literal(&tree, "integer"),
         TreeKind::DecimalLiteral => literal(&tree, "decimal"),
 
-        // Other
-        TreeKind::ParamList => paren_list(&tree),
+        // Names
+        TreeKind::Name => literal_tokens(&extract_children(&tree, "name")),
+        TreeKind::ModRef => literal_tokens(&extract_children(&tree, "module reference")),
+
+        // Types
+        TreeKind::TypeAnn => literal_tokens(&extract_all_tokens(&tree)),
+        TreeKind::Type => literal_tokens(&extract_all_tokens(&tree)),
+        TreeKind::PrimType => literal(&tree, "primitive type"),
 
         _ => panic!("Unsupported tree kind: {:?}", tree.kind),
     }
@@ -110,7 +119,8 @@ fn lower_children(tree: &Tree, start: usize, end: usize) -> Vec<FST> {
 }
 
 fn extract_children(tree: &Tree, desc: &str) -> Vec<SourceToken> {
-    tree.children.iter()
+    tree.children
+        .iter()
         .map(|child| extract_token(child, desc))
         .collect()
 }
@@ -125,10 +135,7 @@ fn sexp(tree: &Tree, start: usize) -> FST {
 }
 
 // Helper function to create special forms with less boilerplate
-fn special_form(
-    tree: &Tree,
-    body_start: usize,
-) -> FST {
+fn special_form(tree: &Tree, body_start: usize) -> FST {
     let sections = tree.children[2..body_start]
         .iter()
         .map(|child| lower_child(child.clone()))
@@ -189,4 +196,17 @@ fn literal_tokens(tokens: &[SourceToken]) -> FST {
     combined_token.range.end = last.range.end.clone();
 
     FST::Literal(combined_token)
+}
+
+// Helper function to extract all tokens from a tree, recursively, essentially flattening
+// them together.
+fn extract_all_tokens(tree: &Tree) -> Vec<SourceToken> {
+    let mut tokens = Vec::new();
+    for child in &tree.children {
+        match child {
+            Child::Token(token) => tokens.push(token.clone()),
+            Child::Tree(subtree) => tokens.extend(extract_all_tokens(subtree)),
+        }
+    }
+    tokens
 }

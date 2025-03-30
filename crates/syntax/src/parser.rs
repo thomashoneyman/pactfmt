@@ -199,7 +199,10 @@ fn module(p: &mut Parser) {
 fn governance(p: &mut Parser) {
     match p.nth(0) {
         TokenKind::String | TokenKind::Symbol | TokenKind::Ident => p.advance(),
-        _ => p.advance_with_error("expected string, symbol, or capability name for governance"),
+        _ => p.advance_with_error(&format!(
+            "expected string, symbol, or capability name for governance but received {:?}",
+            p.nth(0)
+        )),
     }
 }
 
@@ -209,12 +212,19 @@ fn defun(p: &mut Parser) {
     p.expect(TokenKind::DefunKeyword);
     p.expect(TokenKind::Ident);
     if p.at(TokenKind::Colon) {
-        todo!("type")
+        type_annotation(p);
     }
+
     param_list(p);
-    while !p.at(TokenKind::CloseParen) && !p.eof() {
-        expr(p);
+
+    if p.at(TokenKind::CloseParen) {
+        p.advance_with_error("function body must have at least one expression");
+    } else {
+        while !p.at(TokenKind::CloseParen) && !p.eof() {
+            expr(p);
+        }
     }
+
     p.expect(TokenKind::CloseParen);
     p.close(m, TreeKind::Defun);
 }
@@ -225,7 +235,7 @@ fn defcap(p: &mut Parser) {
     p.expect(TokenKind::DefcapKeyword);
     p.expect(TokenKind::Ident);
     if p.at(TokenKind::Colon) {
-        todo!("type")
+        type_annotation(p);
     }
     param_list(p);
     while !p.at(TokenKind::CloseParen) && !p.eof() {
@@ -237,21 +247,31 @@ fn defcap(p: &mut Parser) {
 
 fn expr(p: &mut Parser) {
     match p.nth(0) {
-        TokenKind::Bool | TokenKind::String | TokenKind::Symbol | TokenKind::Ident => p.advance(),
+        TokenKind::Bool | TokenKind::String | TokenKind::Symbol => p.advance(),
+        TokenKind::Ident => parsed_name(p),
         TokenKind::Number => expr_number(p),
         TokenKind::OpenBracket => expr_list(p),
         TokenKind::OpenBrace => match p.nth(2) {
             TokenKind::Colon => expr_object(p),
             TokenKind::BindAssign => expr_binding(p),
-            _ => p.advance_with_error("Expected object or binding"),
+            _ => p.advance_with_error(&format!(
+                "Expected : or := in object or binding but received {:?}",
+                p.nth(2)
+            )),
         },
         TokenKind::OpenParen => match p.nth(1) {
             TokenKind::LetKeyword | TokenKind::LetStarKeyword => expr_let(p),
             TokenKind::LambdaKeyword => expr_lambda(p),
             TokenKind::Ident => expr_app(p),
-            _ => p.advance_with_error("Expected let, app, or lambda"),
+            _ => p.advance_with_error(&format!(
+                "Expected let, app, or lambda but received {:?}",
+                p.nth(1)
+            )),
         },
-        _ => p.advance_with_error("Expected literal, '[', or '(' in expr"),
+        _ => p.advance_with_error(&format!(
+            "Expected literal, '[', or '(' in expr but received {:?}",
+            p.nth(0)
+        )),
     }
 }
 
@@ -262,7 +282,10 @@ fn expr_let(p: &mut Parser) {
         TokenKind::LetKeyword | TokenKind::LetStarKeyword => {
             p.advance();
         }
-        _ => p.advance_with_error("expected 'let' or 'let*' in let binding"),
+        _ => p.advance_with_error(&format!(
+            "expected 'let' or 'let*' in let binding but received {:?}",
+            p.nth(0)
+        )),
     }
 
     p.expect(TokenKind::OpenParen);
@@ -272,7 +295,7 @@ fn expr_let(p: &mut Parser) {
             p.expect(TokenKind::OpenParen);
             p.expect(TokenKind::Ident);
             if p.at(TokenKind::Colon) {
-                todo!("parse types...");
+                type_annotation(p);
             }
             expr(p);
             p.expect(TokenKind::CloseParen);
@@ -302,7 +325,7 @@ fn expr_lambda(p: &mut Parser) {
 fn expr_app(p: &mut Parser) {
     let m = p.open();
     p.expect(TokenKind::OpenParen);
-    p.expect(TokenKind::Ident);
+    parsed_name(p);
     while !p.at(TokenKind::CloseParen) && !p.eof() {
         expr(p);
     }
@@ -335,7 +358,7 @@ fn expr_object(p: &mut Parser) {
                 p.expect(TokenKind::Comma);
             }
         } else {
-            p.advance_with_error("Expected string or symbol in object")
+            p.advance_with_error("Expected string or symbol as object key")
         }
     }
     p.expect(TokenKind::CloseBrace);
@@ -351,13 +374,13 @@ fn expr_binding(p: &mut Parser) {
             p.expect(TokenKind::BindAssign);
             p.expect(TokenKind::Ident);
             if p.at(TokenKind::Colon) {
-                todo!("parse types...");
+                type_annotation(p);
             }
             if p.nth(1) != TokenKind::CloseBrace {
                 p.expect(TokenKind::Comma);
             }
         } else {
-            p.advance_with_error("Expected string or symbol in binding")
+            p.advance_with_error("Expected string or symbol as binding key")
         }
     }
     p.expect(TokenKind::CloseBrace);
@@ -397,28 +420,143 @@ fn expr_number(p: &mut Parser) {
 fn param_list(p: &mut Parser) {
     let m = p.open();
     p.expect(TokenKind::OpenParen);
+
+    // Parse parameters one by one
     while !p.at(TokenKind::CloseParen) && !p.eof() {
-        p.expect(TokenKind::Ident);
+        if !p.at(TokenKind::Ident) {
+            p.advance_with_error("expected identifier in parameter list");
+            continue;
+        }
+
+        p.advance();
         if p.at(TokenKind::Colon) {
-            todo!("parse types...");
+            type_annotation(p);
         }
     }
+
     p.expect(TokenKind::CloseParen);
     p.close(m, TreeKind::ParamList);
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::lexer::tokenize;
+// TODO: Really, type annotations cannot contain whitespace, comments, or newlines,
+// so we may need to enforce this in the parser or lexer.
+fn type_annotation(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::Colon);
+    parse_type(p);
+    p.close(m, TreeKind::TypeAnn);
+}
 
-    #[test]
-    fn parser_debug() {
-        let input = r#"
-            (module my-mod GOV (defcap GOV () true) (defun wot (a b) (+ 1 b)))
-        "#;
-        let tokens = tokenize(input);
-        let parsed = parse(tokens);
-        assert!(parsed.iter().all(|tree| !tree.has_errors()));
+fn parse_type(p: &mut Parser) {
+    match p.nth(0) {
+        TokenKind::Ident => {
+            let m = p.open();
+
+            let token_text = &p.tokens[p.pos].text;
+
+            // Object types: object or object{type}
+            if token_text == "object" {
+                p.advance();
+
+                // Handle object{type} syntax
+                if p.at(TokenKind::OpenBrace) {
+                    p.expect(TokenKind::OpenBrace);
+                    parsed_name(p);
+                    p.expect(TokenKind::CloseBrace);
+                }
+
+                p.close(m, TreeKind::Type);
+                return;
+            }
+
+            // Consume the identifier
+            p.advance();
+
+            // Schema type
+            if p.at(TokenKind::OpenBrace) {
+                p.expect(TokenKind::OpenBrace);
+                parsed_name(p);
+                p.expect(TokenKind::CloseBrace);
+                p.close(m, TreeKind::Type);
+            }
+            // Otherwise, it's a primitive type. Technically, there is a limitedh
+            // set of primitive types, but it's unnecessary to enforce in the
+            // formatter.
+            else {
+                p.close(m, TreeKind::PrimType);
+            }
+        }
+
+        // List type: [Type] or [*]
+        TokenKind::OpenBracket => {
+            let m = p.open();
+            p.expect(TokenKind::OpenBracket);
+
+            // Check for wildcard "*"
+            if p.at(TokenKind::Ident) && &p.tokens[p.pos].text == "*" {
+                p.advance();
+            } else {
+                parse_type(p);
+            }
+
+            p.expect(TokenKind::CloseBracket);
+            p.close(m, TreeKind::Type);
+        }
+
+        // Module reference type: module { Name, ... }
+        TokenKind::ModuleKeyword => {
+            let m = p.open();
+            p.advance();
+            p.expect(TokenKind::OpenBrace);
+
+            while !p.at(TokenKind::CloseBrace) && !p.eof() {
+                parsed_name(p);
+                if p.at(TokenKind::Comma) {
+                    p.advance();
+                }
+            }
+
+            p.expect(TokenKind::CloseBrace);
+            p.close(m, TreeKind::Type);
+        }
+
+        _ => p.advance_with_error("expected a valid type"),
+    }
+}
+
+// Parse a simple name or qualified name (a or a.b.c)
+fn name(p: &mut Parser) {
+    let name = p.open();
+
+    p.expect(TokenKind::Ident);
+
+    // Handle qualified name with dots (a.b.c)
+    while p.at(TokenKind::Dot) {
+        p.advance();
+        p.expect(TokenKind::Ident);
+    }
+
+    p.close(name, TreeKind::Name);
+}
+
+// Parse a module reference (my.mod::name.key)
+fn modref(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::Ident);
+    p.expect(TokenKind::DynAcc);
+    name(p);
+    p.close(m, TreeKind::ModRef);
+}
+
+// Parse a name or module reference
+fn parsed_name(p: &mut Parser) {
+    if p.at(TokenKind::Ident) {
+        if p.nth(1) == TokenKind::DynAcc {
+            modref(p);
+        } else {
+            name(p);
+        }
+    } else {
+        p.advance_with_error("expected identifier in name");
     }
 }
