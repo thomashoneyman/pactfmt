@@ -93,18 +93,14 @@ impl Parser {
 }
 
 impl Parser {
-    fn build_tree(self) -> Tree {
+    fn build_trees(self) -> Vec<Tree> {
         let mut tokens = self.tokens.into_iter();
-        let mut events = self.events;
-        let mut stack = Vec::new();
-
-        // Special case: pop the last Close event to ensure
-        // the stack is non-empty within the loop.
-        assert!(matches!(events.pop(), Some(Event::Close)));
+        let events = self.events;
+        let mut stack = Vec::new(); // in-progress trees
+        let mut result = Vec::new(); // completed trees
 
         for event in events {
             match event {
-                // Starting a new node: push an empty tree to the stack.
                 Event::Open { kind } => {
                     stack.push(Tree {
                         kind,
@@ -112,13 +108,18 @@ impl Parser {
                     });
                 }
 
-                // A tree is done: pop it off the stack and append to a new current tree
                 Event::Close => {
                     let tree = stack.pop().unwrap();
-                    stack.last_mut().unwrap().children.push(Child::Tree(tree));
+                    if stack.is_empty() {
+                        // An empty stack means this was a root-level tree
+                        result.push(tree);
+                    } else {
+                        // Otherwise, this is a child of the current tree on the stack
+                        stack.last_mut().unwrap().children.push(Child::Tree(tree));
+                    }
                 }
 
-                // Consume a token and append it to the current tree
+                // This token is part of the current tree
                 Event::Advance => {
                     let token = tokens.next().unwrap();
                     stack.last_mut().unwrap().children.push(Child::Token(token));
@@ -126,9 +127,6 @@ impl Parser {
             }
         }
 
-        // Parser will guarantee all trees are closed and cover the entirety
-        // of the token stream.
-        assert!(stack.len() == 1);
         assert!(matches!(
             tokens.next(),
             Some(SourceToken {
@@ -137,19 +135,21 @@ impl Parser {
             }) | None
         ));
 
-        stack.pop().unwrap()
+        result
     }
 }
 
-pub fn parse(tokens: Vec<SourceToken>) -> Tree {
+pub fn parse(tokens: Vec<SourceToken>) -> Vec<Tree> {
     let mut p = Parser {
         tokens,
         pos: 0,
         fuel: Cell::new(256),
         events: Vec::new(),
     };
-    file(&mut p);
-    p.build_tree()
+    while !p.eof() {
+        top_level(&mut p);
+    }
+    p.build_trees()
 }
 
 // Immediate TODOs:
@@ -158,14 +158,6 @@ pub fn parse(tokens: Vec<SourceToken>) -> Tree {
 //   - annotations (doc, event, etc)
 //
 // Then move on to lower_tree and iterate?
-
-fn file(p: &mut Parser) {
-    let m = p.open();
-    while !p.eof() {
-        top_level(p);
-    }
-    p.close(m, TreeKind::File);
-}
 
 fn top_level(p: &mut Parser) {
     if p.at(TokenKind::OpenParen) {
@@ -427,6 +419,6 @@ mod tests {
         "#;
         let tokens = tokenize(input);
         let parsed = parse(tokens);
-        assert!(!&parsed.has_errors(), "Tree has errors {:?}", parsed);
+        assert!(parsed.iter().all(|tree| !tree.has_errors()));
     }
 }

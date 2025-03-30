@@ -2,32 +2,32 @@ use syntax::types::{Child, Tree, TreeKind};
 
 use crate::format_tree::{ListItem, SpecialForm, Wrapped, FST};
 
-pub fn lower_file(tree: Tree) -> Vec<FST> {
-    tree.children.into_iter().map(lower_child).collect()
+pub fn lower_tree(tree: Tree) -> FST {
+    match tree.kind {
+        // Toplevel
+        TreeKind::Module => lower_module(&tree),
+
+        // Defs
+        TreeKind::Defun => lower_defun(&tree),
+        TreeKind::Defcap => lower_defcap(&tree),
+
+        // Exprs
+        TreeKind::App => lower_app(&tree),
+        TreeKind::List => lower_list(&tree),
+        TreeKind::IntLiteral => lower_int(&tree),
+        TreeKind::DecimalLiteral => lower_decimal(&tree),
+
+        // Other
+        TreeKind::ParamList => lower_param_list(&tree),
+
+        _ => panic!("Unsupported tree kind: {:?}", tree.kind),
+    }
 }
 
 pub fn lower_child(child: Child) -> FST {
     match child {
+        Child::Tree(tree) => lower_tree(tree),
         Child::Token(token) => FST::Literal(token),
-        Child::Tree(tree) => match tree.kind {
-            // Toplevel
-            TreeKind::Module => lower_module(&tree),
-
-            // Defs
-            TreeKind::Defun => lower_defun(&tree),
-            TreeKind::Defcap => lower_defcap(&tree),
-
-            // Exprs
-            TreeKind::App => lower_app(&tree),
-            TreeKind::List => lower_list(&tree),
-            TreeKind::IntLiteral => lower_int(&tree),
-            TreeKind::DecimalLiteral => lower_decimal(&tree),
-
-            // Other
-            TreeKind::ParamList => lower_param_list(&tree),
-
-            _ => panic!("Unsupported tree kind: {:?}", tree.kind),
-        },
     }
 }
 

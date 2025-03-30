@@ -101,7 +101,6 @@ pub enum TokenKind {
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum TreeKind {
     // Top-level structure
-    File,
     TopLevel,
 
     // Module and interface structures
