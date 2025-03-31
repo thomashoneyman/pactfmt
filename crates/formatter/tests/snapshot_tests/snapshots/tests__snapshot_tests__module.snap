@@ -11,6 +11,8 @@ expression: "format_source(content, 60).unwrap()"
       ; why though
       b:string
     )
+    @doc "docstring"
+    @model [ ]
     (+ 1 b)
   )
   

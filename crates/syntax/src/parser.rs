@@ -1,3 +1,7 @@
+/// TODO:
+///   - widen error trees such that an error continues until
+///     some recoverable syntax (like an open paren) is found
+///   - record errors in the parser, as purescript-analyzer does
 use crate::types::{Child, SourceToken, TokenKind, Tree, TreeKind};
 use std::cell::Cell;
 
@@ -152,13 +156,6 @@ pub fn parse(tokens: Vec<SourceToken>) -> Vec<Tree> {
     p.build_trees()
 }
 
-// Immediate TODOs:
-//   - module body
-//   - typed identifiers
-//   - annotations (doc, event, etc)
-//
-// Then move on to lower_tree and iterate?
-
 fn top_level(p: &mut Parser) {
     if p.at(TokenKind::OpenParen) {
         match p.nth(1) {
@@ -179,8 +176,10 @@ fn module(p: &mut Parser) {
     p.expect(TokenKind::OpenParen);
     p.expect(TokenKind::ModuleKeyword);
     p.expect(TokenKind::Ident);
+
     governance(p);
-    // TODO: documentation
+    annotations(p);
+
     while !p.at(TokenKind::CloseParen) && !p.eof() {
         if p.at(TokenKind::OpenParen) {
             match p.nth(1) {
@@ -212,6 +211,7 @@ fn defun(p: &mut Parser) {
     p.expect(TokenKind::DefunKeyword);
     name(p);
     param_list(p);
+    annotations(p);
     if p.at(TokenKind::CloseParen) {
         p.advance_with_error("function body must have at least one expression");
     } else {
@@ -229,6 +229,7 @@ fn defcap(p: &mut Parser) {
     p.expect(TokenKind::DefcapKeyword);
     name(p);
     param_list(p);
+    annotations(p);
     while !p.at(TokenKind::CloseParen) && !p.eof() {
         expr(p);
     }
@@ -419,16 +420,28 @@ fn param_list(p: &mut Parser) {
     p.close(m, TreeKind::ParamList);
 }
 
-// TODO: Really, type annotations cannot contain whitespace, comments, or newlines,
-// so we may need to enforce this in the parser or lexer.
-fn type_annotation(p: &mut Parser) {
-    let m = p.open();
-    p.expect(TokenKind::Colon);
-    parse_type(p);
-    p.close(m, TreeKind::TypeAnn);
+// Parse a simple name or qualified name (a or a.b.c)
+fn name(p: &mut Parser) {
+    let name = p.open();
+    p.expect(TokenKind::Ident);
+    while p.at(TokenKind::Dot) {
+        p.advance();
+        p.expect(TokenKind::Ident);
+    }
+    // Include type annotation as a child of the name node if present
+    // TODO: We perhaps should provide separate name and typeable_name
+    // nodes, since types aren't allowed in all places.
+    if p.at(TokenKind::Colon) {
+        let m = p.open();
+        p.expect(TokenKind::Colon);
+        ty(p);
+        p.close(m, TreeKind::TypeAnn);
+    }
+    p.close(name, TreeKind::Name);
 }
 
-fn parse_type(p: &mut Parser) {
+// Helper function for parsing types as part of a type annotation
+fn ty(p: &mut Parser) {
     match p.nth(0) {
         TokenKind::Ident => {
             let m = p.open();
@@ -477,7 +490,7 @@ fn parse_type(p: &mut Parser) {
             if p.at(TokenKind::Ident) && &p.tokens[p.pos].text == "*" {
                 p.advance();
             } else {
-                parse_type(p);
+                ty(p);
             }
 
             p.expect(TokenKind::CloseBracket);
@@ -505,23 +518,6 @@ fn parse_type(p: &mut Parser) {
     }
 }
 
-// Parse a simple name or qualified name (a or a.b.c)
-fn name(p: &mut Parser) {
-    let name = p.open();
-    p.expect(TokenKind::Ident);
-    while p.at(TokenKind::Dot) {
-        p.advance();
-        p.expect(TokenKind::Ident);
-    }
-    // Include type annotation as a child of the name node if present
-    // TODO: We perhaps should provide separate name and typeable_name
-    // nodes, since types aren't allowed in all places.
-    if p.at(TokenKind::Colon) {
-        type_annotation(p);
-    }
-    p.close(name, TreeKind::Name);
-}
-
 // Parse a module reference (my.mod::name.key)
 fn modref(p: &mut Parser) {
     let m = p.open();
@@ -542,4 +538,65 @@ fn parsed_name(p: &mut Parser) {
     } else {
         p.advance_with_error("expected identifier in name");
     }
+}
+
+// TODO: This currently parsers all annotations and allows multiple
+// instances of the same annotation, but in practice not all annotations
+// can be used together in all contexts and any particular annotation
+// can appear at most once. We also don't parse leading strings as a
+// docstring and just assume it is part of the body.
+fn annotations(p: &mut Parser) {
+    // An initial bare string is a docstring
+    if p.at(TokenKind::String) && p.nth(1) != TokenKind::CloseParen {
+        p.advance();
+    }
+
+    while p.at(TokenKind::DocAnnKeyword)
+        || p.at(TokenKind::ModelAnnKeyword)
+        || p.at(TokenKind::EventAnnKeyword)
+        || p.at(TokenKind::ManagedAnnKeyword)
+    {
+        match p.nth(0) {
+            TokenKind::DocAnnKeyword => doc_ann(p),
+            TokenKind::ModelAnnKeyword => model_ann(p),
+            TokenKind::EventAnnKeyword => event_ann(p),
+            TokenKind::ManagedAnnKeyword => managed_ann(p),
+            _ => unreachable!(),
+        }
+    }
+}
+
+fn doc_ann(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::DocAnnKeyword);
+    p.expect(TokenKind::String);
+    p.close(m, TreeKind::DocAnn);
+}
+
+fn model_ann(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::ModelAnnKeyword);
+    p.expect(TokenKind::OpenBracket);
+    while !p.at(TokenKind::CloseBracket) && !p.eof() {
+        // TODO: parse properties
+        p.advance();
+    }
+    p.expect(TokenKind::CloseBracket);
+    p.close(m, TreeKind::ModelAnn);
+}
+
+fn event_ann(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::EventAnnKeyword);
+    p.close(m, TreeKind::EventAnn);
+}
+
+fn managed_ann(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::ManagedAnnKeyword);
+    if p.at(TokenKind::Ident) {
+        name(p); // resource
+        name(p); // manager fn
+    }
+    p.close(m, TreeKind::ManagedAnn);
 }

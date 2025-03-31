@@ -107,9 +107,10 @@ pub enum TreeKind {
     Module,
     Interface,
     Governance,
-    Documentation,
-    DocAnnotation,
-    ModelAnnotation,
+    DocAnn,
+    ModelAnn,
+    EventAnn,
+    ManagedAnn,
 
     // External declarations
     ExternalDecl,
@@ -119,7 +120,6 @@ pub enum TreeKind {
     Bless,
 
     // Definitions
-    Def,
     ParamList,
     Defun,
     Defconst,
