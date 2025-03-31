@@ -5,6 +5,7 @@ use test_utils::{find_pact_files, flatten_pact_file, flatten_pact_string, run_pa
 #[test]
 fn test_pact_parser_agreement() {
     let test_files = find_pact_files("tests/integration_tests/fixtures");
+    let mut failures = Vec::new();
 
     for file in test_files {
         let content = flatten_pact_file(&file);
@@ -24,9 +25,11 @@ fn test_pact_parser_agreement() {
         };
 
         if original_output == formatted_output {
-            println!("✅ SUCCESS - Parser outputs match");
+            println!("✅ {}", file.display());
             continue;
         } else {
+            println!("❌ {}", file.display());
+
             let original_lines: Vec<&str> = original_output.lines().collect();
             let formatted_lines: Vec<&str> = formatted_output.lines().collect();
 
@@ -45,7 +48,15 @@ fn test_pact_parser_agreement() {
             let original_context: String = original_lines[context_start..].join("\n");
             let formatted_context: String = formatted_lines[context_start..].join("\n");
 
-            assert_eq!(original_context, formatted_context);
+            failures.push((file.display().to_string(), original_context, formatted_context));
+        }
+    }
+
+    // After processing all files, assert on any failures
+    if !failures.is_empty() {
+        for (file, original, formatted) in failures {
+            println!("\nFailure in file: {}", file);
+            assert_eq!(original, formatted, "Parser output mismatch in {}", file);
         }
     }
 }

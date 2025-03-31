@@ -245,14 +245,16 @@ impl<'a> Lexer<'a> {
                     "defschema" => TokenKind::DefschemaKeyword,
                     "deftable" => TokenKind::DeftableKeyword,
                     "true" | "false" => TokenKind::Bool,
+                    "lam" => TokenKind::LamKeyword,
+                    "defproperty" => TokenKind::DefpropertyKeyword,
                     // Reserved in the parser, but not in the lexer
-                    "with-capability" => TokenKind::WithCapabilityKeyword,
-                    "with-read" => TokenKind::WithReadKeyword,
-                    "with-default-read" => TokenKind::WithDefaultReadKeyword,
-                    "enforce" => TokenKind::EnforceKeyword,
-                    "if" => TokenKind::IfKeyword,
-                    "cond" => TokenKind::CondKeyword,
-                    "do" => TokenKind::DoKeyword,
+                    // "with-capability" => TokenKind::WithCapabilityKeyword,
+                    // "with-read" => TokenKind::WithReadKeyword,
+                    // "with-default-read" => TokenKind::WithDefaultReadKeyword,
+                    // "enforce" => TokenKind::EnforceKeyword,
+                    // "if" => TokenKind::IfKeyword,
+                    // "cond" => TokenKind::CondKeyword,
+                    // "do" => TokenKind::DoKeyword,
                     _ => TokenKind::Ident,
                 }
             }
@@ -550,19 +552,21 @@ mod tests {
     #[test]
     fn test_keywords() {
         let source =
-            "let let* lambda module interface use bless implements step step-with-rollback";
+            "let let* lambda lam defproperty module interface use bless implements step step-with-rollback";
         let tokens = tokenize(source);
 
         assert_eq!(tokens[0].kind, TokenKind::LetKeyword);
         assert_eq!(tokens[1].kind, TokenKind::LetStarKeyword);
         assert_eq!(tokens[2].kind, TokenKind::LambdaKeyword);
-        assert_eq!(tokens[3].kind, TokenKind::ModuleKeyword);
-        assert_eq!(tokens[4].kind, TokenKind::InterfaceKeyword);
-        assert_eq!(tokens[5].kind, TokenKind::ImportKeyword);
-        assert_eq!(tokens[6].kind, TokenKind::BlessKeyword);
-        assert_eq!(tokens[7].kind, TokenKind::ImplementsKeyword);
-        assert_eq!(tokens[8].kind, TokenKind::StepKeyword);
-        assert_eq!(tokens[9].kind, TokenKind::StepWithRollbackKeyword);
+        assert_eq!(tokens[3].kind, TokenKind::LamKeyword);
+        assert_eq!(tokens[4].kind, TokenKind::DefpropertyKeyword);
+        assert_eq!(tokens[5].kind, TokenKind::ModuleKeyword);
+        assert_eq!(tokens[6].kind, TokenKind::InterfaceKeyword);
+        assert_eq!(tokens[7].kind, TokenKind::ImportKeyword);
+        assert_eq!(tokens[8].kind, TokenKind::BlessKeyword);
+        assert_eq!(tokens[9].kind, TokenKind::ImplementsKeyword);
+        assert_eq!(tokens[10].kind, TokenKind::StepKeyword);
+        assert_eq!(tokens[11].kind, TokenKind::StepWithRollbackKeyword);
     }
 
     #[test]
