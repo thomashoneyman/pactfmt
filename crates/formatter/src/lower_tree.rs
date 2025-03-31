@@ -21,8 +21,8 @@ pub fn lower_tree(tree: Tree) -> FST {
         TreeKind::ParamList => paren_list(&tree),
 
         // Literals
-        TreeKind::IntLiteral => literal(&tree, "integer"),
-        TreeKind::DecimalLiteral => literal(&tree, "decimal"),
+        TreeKind::IntLiteral => literal_token(&tree, "integer"),
+        TreeKind::DecimalLiteral => compound_literal(&extract_all_tokens(&tree)),
 
         // Names
         TreeKind::Name => compound_literal(&extract_all_tokens(&tree)),
@@ -31,7 +31,13 @@ pub fn lower_tree(tree: Tree) -> FST {
         // Types
         TreeKind::TypeAnn => compound_literal(&extract_all_tokens(&tree)),
         TreeKind::Type => compound_literal(&extract_all_tokens(&tree)),
-        TreeKind::PrimType => literal(&tree, "primitive type"),
+        TreeKind::PrimType => literal_token(&tree, "primitive type"),
+
+        // Annotations
+        TreeKind::DocAnn => literals(&tree),
+        TreeKind::ModelAnn => literals(&tree),
+        TreeKind::EventAnn => literals(&tree),
+        TreeKind::ManagedAnn => literals(&tree),
 
         _ => panic!("Unsupported tree kind: {:?}", tree.kind),
     }
@@ -149,7 +155,7 @@ fn special_form(tree: &Tree, body_start: usize) -> FST {
 pub fn lower_child(child: Child) -> FST {
     match child {
         Child::Tree(tree) => lower_tree(tree),
-        Child::Token(token) => FST::Literal(token),
+        Child::Token(token) => FST::Literal(vec![token]),
     }
 }
 
@@ -162,14 +168,20 @@ fn extract_token(child: &Child, expected: &str) -> SourceToken {
 }
 
 // Helper function to create a literal from a token
-fn literal(tree: &Tree, desc: &str) -> FST {
+fn literal_token(tree: &Tree, desc: &str) -> FST {
     if tree.children.len() == 1 {
-        FST::Literal(open_token(tree, desc))
+        FST::Literal(vec![open_token(tree, desc)])
     } else {
-        compound_literal(&extract_all_tokens(tree))
+        panic!("Expected single token for {}", desc);
     }
 }
 
+// Helper function to create a literal from a list of tokens
+fn literals(tree: &Tree) -> FST {
+    FST::Literal(extract_all_tokens(tree))
+}
+
+// Create a compound literal from a list of tokens (joined without spaces)
 fn compound_literal(tokens: &[SourceToken]) -> FST {
     if tokens.is_empty() {
         panic!("Cannot create literal from empty tokens");

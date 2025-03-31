@@ -1,3 +1,7 @@
+/// TODO:
+///   - add 'raw' FST node, which takes a list of tokens and
+///     just prints them out using basic RcDoc primitives, including
+///     faithfully reproducing trivia.
 use crate::format_doc::{doc_is_nil, format_with_comments, FormatDoc};
 use pretty::DocAllocator;
 use syntax::types::SourceToken;
@@ -35,7 +39,7 @@ pub struct Wrapped<T> {
 #[allow(clippy::upper_case_acronyms, dead_code)]
 #[derive(Debug, PartialEq, Clone)]
 pub enum FST {
-    Literal(SourceToken),
+    Literal(Vec<SourceToken>),
     CompoundLiteral(Vec<SourceToken>),
     List(Wrapped<Vec<ListItem>>),
     Object(Wrapped<Vec<ObjectItem>>),
@@ -50,11 +54,28 @@ impl FST {
         D::Doc: Clone,
     {
         match self {
-            FST::Literal(token) => format_with_comments(
-                &token.leading,
-                &token.trailing,
-                FormatDoc::text(allocator, &token.text),
-            ),
+            FST::Literal(tokens) => {
+                if tokens.is_empty() {
+                    return FormatDoc::nil(allocator);
+                }
+
+                let mut result = format_with_comments(
+                    &tokens[0].leading,
+                    &tokens[0].trailing,
+                    FormatDoc::text(allocator, &tokens[0].text),
+                );
+
+                for token in &tokens[1..] {
+                    let doc = format_with_comments(
+                        &token.leading,
+                        &token.trailing,
+                        FormatDoc::text(allocator, &token.text),
+                    );
+                    result = result.join_line(doc);
+                }
+
+                result.group()
+            }
 
             FST::CompoundLiteral(tokens) => {
                 if tokens.is_empty() {
@@ -79,6 +100,7 @@ impl FST {
                 result.group()
             }
 
+            // TODO: Handle empty lists
             FST::List(Wrapped { open, inner, close }) => {
                 let mut result = FormatDoc::nil(allocator);
                 let mut iter = inner.iter().map(|ListItem { value, comma }| {
