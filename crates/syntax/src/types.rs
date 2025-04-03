@@ -43,6 +43,8 @@ pub enum TokenKind {
     LetKeyword,
     LetStarKeyword,
     LambdaKeyword,
+    LamKeyword,
+    DefpropertyKeyword,
     ModuleKeyword,
     InterfaceKeyword,
     ImportKeyword, // use keyword
@@ -50,6 +52,7 @@ pub enum TokenKind {
     ImplementsKeyword,
     StepKeyword,
     StepWithRollbackKeyword,
+    ResumeKeyword,
     DefunKeyword,
     DefconstKeyword,
     DefcapKeyword,
@@ -81,16 +84,6 @@ pub enum TokenKind {
     Symbol,
     Bool,
 
-    // Keywords not reserved in the Pact lexer, but which we expect
-    // to provide different formatting.
-    WithCapabilityKeyword,  // with-capability
-    WithReadKeyword,        // with-read
-    WithDefaultReadKeyword, // with-default-read
-    EnforceKeyword,         // enforce
-    IfKeyword,              // if
-    CondKeyword,            // cond
-    DoKeyword,              // do
-
     // Special tokens
     Eof,
     Error,
@@ -106,7 +99,6 @@ pub enum TreeKind {
     // Module and interface structures
     Module,
     Interface,
-    Governance,
     DocAnn,
     ModelAnn,
     EventAnn,
@@ -131,6 +123,7 @@ pub enum TreeKind {
     // Pact steps
     Step,
     StepWithRollback,
+    Resume,
 
     // Interface definitions (consts, schemas are the same as normal defs)
     IfDef,
@@ -144,6 +137,7 @@ pub enum TreeKind {
     // Parameters and fields
     Param,
     SchemaField,
+    TableName,
 
     // Type system
     TypeAnn,
@@ -153,6 +147,7 @@ pub enum TreeKind {
     // Expressions
     Let,
     Binder,
+    BindingList,
     Lambda,
     App,
     Binding,
@@ -170,22 +165,15 @@ pub enum TreeKind {
     ModRef,
 
     // Property expressions
-    // PropertyExpr,
-    // PropLet,
-    // PropBinder,
-    // PropLam,
-    // PropApp,
-    // PropList,
-    // PropDefProperty,
+    PropList,
+    PropLet,
+    PropBinder,
+    PropLam,
+    PropApp,
+    PropDefProperty,
 
-    // Special functions we intend to format differently
-    // WithCapability,
-    // WithRead,
-    // WithDefaultRead,
-    // Enforce,
-    // If,
-    // Cond,
-    // Do,
+    // Additional nodes we treat specially
+    If,
 
     // Error node
     ErrorTree,

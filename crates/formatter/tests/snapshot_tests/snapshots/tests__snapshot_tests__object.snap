@@ -1,0 +1,10 @@
+---
+source: crates/formatter/tests/snapshot_tests/mod.rs
+expression: "format_source(content, 60).unwrap()"
+---
+{
+  "receiver": 1,
+  "receiver-guard": 2,
+  "amount": 3,
+  "source-chain": 4
+}

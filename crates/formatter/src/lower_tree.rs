@@ -1,6 +1,6 @@
 use syntax::types::{Child, SourceToken, TokenKind, Tree, TreeKind};
 
-use crate::format_tree::{ListItem, SpecialForm, Wrapped, FST};
+use crate::format_tree::{ListItem, ObjectItem, SpecialForm, Wrapped, FST};
 
 /// Lower a parsed tree into a format syntax tree suitable for
 /// use with format_source and other formatting functions.
@@ -9,16 +9,36 @@ pub fn lower_tree(tree: Tree) -> FST {
         // Toplevel
         TreeKind::Module => special_form(&tree, 4),
 
+        // Module body
+        TreeKind::Bless => sexp(&tree),
+
         // Defs
         TreeKind::Defun => special_form(&tree, find_param_list_index(&tree) + 1),
         TreeKind::Defcap => special_form(&tree, find_param_list_index(&tree) + 1),
+        TreeKind::Defconst => special_form(&tree, tree.children.len() - 2),
+        TreeKind::Defschema => special_form(&tree, find_first_schema_field_index(&tree) + 1),
+        TreeKind::Deftable => special_form(&tree, find_table_name_index(&tree) + 1),
+        TreeKind::Defpact => special_form(&tree, find_param_list_index(&tree) + 1),
 
         // Exprs
-        TreeKind::App => sexp(&tree, 1),
+        TreeKind::App => sexp(&tree),
         TreeKind::List => bracket_list(&tree),
+        TreeKind::Let => special_form(&tree, 3),
+        TreeKind::Object => object(&tree),
+        TreeKind::Binding => object(&tree),
+        TreeKind::If => special_form(&tree, 4),
 
         // Expr parts
         TreeKind::ParamList => paren_list(&tree),
+        TreeKind::BindingList => paren_list(&tree),
+        TreeKind::SchemaField => compound_literal(&extract_all_tokens(&tree)),
+        TreeKind::TableName => compound_literal(&extract_all_tokens(&tree)),
+        TreeKind::Binder => sexp(&tree),
+
+        // Pact steps
+        TreeKind::Step => sexp(&tree),
+        TreeKind::StepWithRollback => sexp(&tree),
+        TreeKind::Resume => sexp(&tree),
 
         // Literals
         TreeKind::IntLiteral => literal_token(&tree, "integer"),
@@ -34,10 +54,20 @@ pub fn lower_tree(tree: Tree) -> FST {
         TreeKind::PrimType => literal_token(&tree, "primitive type"),
 
         // Annotations
-        TreeKind::DocAnn => literals(&tree),
-        TreeKind::ModelAnn => literals(&tree),
-        TreeKind::EventAnn => literals(&tree),
-        TreeKind::ManagedAnn => literals(&tree),
+        TreeKind::DocAnn => unwrapped_annotation(&tree),
+        TreeKind::ModelAnn => unwrapped_annotation(&tree),
+        TreeKind::EventAnn => unwrapped_annotation(&tree),
+        TreeKind::ManagedAnn => unwrapped_annotation(&tree),
+
+        // Property expressions
+        TreeKind::PropList => bracket_list(&tree),
+        TreeKind::PropLet => sexp(&tree),
+        TreeKind::PropBinder => sexp(&tree),
+        TreeKind::PropLam => sexp(&tree),
+        TreeKind::PropApp => sexp(&tree),
+        TreeKind::PropDefProperty => {
+            special_form(&tree, find_param_list_index_with_default(&tree, 2) + 1)
+        }
 
         _ => panic!("Unsupported tree kind: {:?}", tree.kind),
     }
@@ -125,10 +155,10 @@ fn lower_children(tree: &Tree, start: usize, end: usize) -> Vec<FST> {
 }
 
 // Helper for creating s-expressions
-fn sexp(tree: &Tree, start: usize) -> FST {
+fn sexp(tree: &Tree) -> FST {
     FST::SExp(Wrapped {
         open: open_token(tree, "open paren"),
-        inner: lower_children(tree, start, 1),
+        inner: lower_children(tree, 1, 1),
         close: close_token(tree, "close paren"),
     })
 }
@@ -148,6 +178,45 @@ fn special_form(tree: &Tree, body_start: usize) -> FST {
             body: lower_children(tree, body_start, 1),
         },
         close: close_token(tree, "close paren"),
+    })
+}
+
+fn object(tree: &Tree) -> FST {
+    fn process_item(chunk: &[Child], is_final: bool) -> ObjectItem {
+        let key = extract_token(&chunk[0], "key");
+        let sep = extract_token(&chunk[1], "separator");
+        let value = lower_child(chunk[2].clone());
+
+        let comma = if !is_final {
+            Some(extract_token(&chunk[3], "comma"))
+        } else {
+            None
+        };
+
+        ObjectItem {
+            key,
+            sep,
+            value,
+            comma,
+        }
+    }
+
+    let inner_children = &tree.children[1..tree.children.len() - 1];
+
+    let mut items = Vec::new();
+    let mut i = 0;
+
+    while i + 3 <= inner_children.len() {
+        let is_final = i + 3 == inner_children.len() || i + 4 == inner_children.len();
+        let chunk_size = if is_final { 3 } else { 4 };
+        items.push(process_item(&inner_children[i..i + chunk_size], is_final));
+        i += chunk_size;
+    }
+
+    FST::Object(Wrapped {
+        open: open_token(tree, "open brace"),
+        inner: items,
+        close: close_token(tree, "close brace"),
     })
 }
 
@@ -208,4 +277,47 @@ fn find_param_list_index(tree: &Tree) -> usize {
         .iter()
         .position(|child| matches!(child, Child::Tree(t) if t.kind == TreeKind::ParamList))
         .expect("Expected parameter list but none found.")
+}
+
+fn find_param_list_index_with_default(tree: &Tree, default: usize) -> usize {
+    tree.children
+        .iter()
+        .position(|child| matches!(child, Child::Tree(t) if t.kind == TreeKind::ParamList))
+        .unwrap_or(default)
+}
+
+// Find the index of the first schema field, e.g. in a defschema
+fn find_first_schema_field_index(tree: &Tree) -> usize {
+    tree.children
+        .iter()
+        .position(|child| matches!(child, Child::Tree(t) if t.kind == TreeKind::SchemaField))
+        .expect("Expected schema field but none found.")
+}
+
+fn find_table_name_index(tree: &Tree) -> usize {
+    tree.children
+        .iter()
+        .position(|child| matches!(child, Child::Tree(t) if t.kind == TreeKind::TableName))
+        .expect("Expected table name but none found.")
+}
+
+fn unwrapped_annotation(tree: &Tree) -> FST {
+    if tree.children.len() < 2 {
+        return literals(tree);
+    }
+
+    let annotation = match &tree.children[0] {
+        Child::Token(token) => FST::Literal(vec![token.clone()]),
+        _ => panic!("Expected token for annotation name"),
+    };
+
+    let content: Vec<FST> = tree.children[1..]
+        .iter()
+        .map(|child| lower_child(child.clone()))
+        .collect();
+
+    let mut items = vec![annotation];
+    items.extend(content);
+
+    FST::Unwrapped(items)
 }

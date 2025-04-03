@@ -92,6 +92,8 @@ fn format_tokens_for_comparison(tokens: &[SourceToken]) -> Vec<String> {
             TokenKind::LetKeyword => "let".to_string(),
             TokenKind::LetStarKeyword => "let*".to_string(),
             TokenKind::LambdaKeyword => "lambda".to_string(),
+            TokenKind::LamKeyword => "ident<lam>".to_string(),
+            TokenKind::DefpropertyKeyword => "ident<defproperty>".to_string(),
             TokenKind::ModuleKeyword => "module".to_string(),
             TokenKind::InterfaceKeyword => "interface".to_string(),
             TokenKind::ImportKeyword => "use".to_string(),
@@ -99,6 +101,7 @@ fn format_tokens_for_comparison(tokens: &[SourceToken]) -> Vec<String> {
             TokenKind::ImplementsKeyword => "implements".to_string(),
             TokenKind::StepKeyword => "step".to_string(),
             TokenKind::StepWithRollbackKeyword => "step-with-rollback".to_string(),
+            TokenKind::ResumeKeyword => "ident<resume>".to_string(),
             TokenKind::DefunKeyword => "defun".to_string(),
             TokenKind::DefconstKeyword => "defconst".to_string(),
             TokenKind::DefcapKeyword => "defcap".to_string(),
@@ -131,13 +134,13 @@ fn format_tokens_for_comparison(tokens: &[SourceToken]) -> Vec<String> {
             TokenKind::Bool => token.text.clone(),
 
             // Keywords not reserved in the Pact lexer, but reserved in the parser
-            TokenKind::WithCapabilityKeyword => "ident<with-capability>".to_string(),
-            TokenKind::WithReadKeyword => "ident<with-read>".to_string(),
-            TokenKind::WithDefaultReadKeyword => "ident<with-default-read>".to_string(),
-            TokenKind::EnforceKeyword => "ident<enforce>".to_string(),
-            TokenKind::IfKeyword => "ident<if>".to_string(),
-            TokenKind::CondKeyword => "ident<cond>".to_string(),
-            TokenKind::DoKeyword => "ident<do>".to_string(),
+            // TokenKind::WithCapabilityKeyword => "ident<with-capability>".to_string(),
+            // TokenKind::WithReadKeyword => "ident<with-read>".to_string(),
+            // TokenKind::WithDefaultReadKeyword => "ident<with-default-read>".to_string(),
+            // TokenKind::EnforceKeyword => "ident<enforce>".to_string(),
+            // TokenKind::IfKeyword => "ident<if>".to_string(),
+            // TokenKind::CondKeyword => "ident<cond>".to_string(),
+            // TokenKind::DoKeyword => "ident<do>".to_string(),
 
             // Special tokens
             TokenKind::Eof => "eof".to_string(),

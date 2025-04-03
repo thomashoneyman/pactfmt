@@ -1,0 +1,12 @@
+---
+source: crates/formatter/tests/snapshot_tests/mod.rs
+expression: "format_source(content, 60).unwrap()"
+---
+(bind
+  {
+    "receiver" := receiver,
+    "receiver-guard" := receiver-guard,
+    "amount" := amount,
+    "source-chain" := source-chain
+  }
+  1)
