@@ -65,7 +65,9 @@ pub fn lower_tree(tree: Tree) -> FST {
         TreeKind::PropBinder => sexp(&tree),
         TreeKind::PropLam => sexp(&tree),
         TreeKind::PropApp => sexp(&tree),
-        TreeKind::PropDefProperty => special_form(&tree, find_param_list_index_with_default(&tree, 2) + 1),
+        TreeKind::PropDefProperty => {
+            special_form(&tree, find_param_list_index_with_default(&tree, 2) + 1)
+        }
 
         _ => panic!("Unsupported tree kind: {:?}", tree.kind),
     }
@@ -191,7 +193,12 @@ fn object(tree: &Tree) -> FST {
             None
         };
 
-        ObjectItem { key, sep, value, comma }
+        ObjectItem {
+            key,
+            sep,
+            value,
+            comma,
+        }
     }
 
     let inner_children = &tree.children[1..tree.children.len() - 1];
@@ -202,7 +209,7 @@ fn object(tree: &Tree) -> FST {
     while i + 3 <= inner_children.len() {
         let is_final = i + 3 == inner_children.len() || i + 4 == inner_children.len();
         let chunk_size = if is_final { 3 } else { 4 };
-        items.push(process_item(&inner_children[i..i+chunk_size], is_final));
+        items.push(process_item(&inner_children[i..i + chunk_size], is_final));
         i += chunk_size;
     }
 

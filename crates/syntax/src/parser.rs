@@ -833,7 +833,7 @@ fn prop_def_property(p: &mut Parser) {
 
 fn has_param_list(p: &mut Parser) -> bool {
     let mut pos = p.pos;
-    let mut depth = 1;  // Start at 1 since we're already inside defproperty
+    let mut depth = 1; // Start at 1 since we're already inside defproperty
 
     // Skip the open paren
     pos += 1;
@@ -848,11 +848,13 @@ fn has_param_list(p: &mut Parser) -> bool {
                 depth -= 1;
                 // If we closed the first paren and immediately see another open paren
                 // before closing the defproperty, then we have a param list
-                if depth == 1 && pos + 1 < p.tokens.len() &&
-                   p.tokens[pos + 1].kind == TokenKind::OpenParen {
+                if depth == 1
+                    && pos + 1 < p.tokens.len()
+                    && p.tokens[pos + 1].kind == TokenKind::OpenParen
+                {
                     return true;
                 }
-            },
+            }
             _ => {}
         }
         pos += 1;

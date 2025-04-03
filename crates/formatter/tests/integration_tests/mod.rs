@@ -48,7 +48,11 @@ fn test_pact_parser_agreement() {
             let original_context: String = original_lines[context_start..].join("\n");
             let formatted_context: String = formatted_lines[context_start..].join("\n");
 
-            failures.push((file.display().to_string(), original_context, formatted_context));
+            failures.push((
+                file.display().to_string(),
+                original_context,
+                formatted_context,
+            ));
         }
     }
 

@@ -4,7 +4,7 @@
 ///     faithfully reproducing trivia.
 use crate::format_doc::{doc_is_nil, format_with_comments, FormatDoc};
 use pretty::DocAllocator;
-use syntax::types::{SourceToken, Trivia, TokenKind};
+use syntax::types::{SourceToken, TokenKind, Trivia};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct ListItem {
@@ -141,45 +141,56 @@ impl FST {
 
             FST::Object(Wrapped { open, inner, close }) => {
                 let mut result = FormatDoc::nil(allocator);
-                let mut iter = inner.iter().map(|ObjectItem { key, sep, value, comma }| {
-                    let comma = match comma {
-                        Some(comma) => {
-                            let leading = if comma.leading.iter().any(|t| matches!(t, Trivia::Comment(_))) {
-                                &comma.leading
-                            } else {
-                                &vec![]
-                            };
-                            format_with_comments(
-                                &leading,
-                                &comma.trailing,
-                                FormatDoc::text(allocator, &comma.text),
-                            )
-                        },
-                        None => FormatDoc::nil(allocator),
-                    };
+                let mut iter = inner.iter().map(
+                    |ObjectItem {
+                         key,
+                         sep,
+                         value,
+                         comma,
+                     }| {
+                        let comma = match comma {
+                            Some(comma) => {
+                                let leading = if comma
+                                    .leading
+                                    .iter()
+                                    .any(|t| matches!(t, Trivia::Comment(_)))
+                                {
+                                    &comma.leading
+                                } else {
+                                    &vec![]
+                                };
+                                format_with_comments(
+                                    leading,
+                                    &comma.trailing,
+                                    FormatDoc::text(allocator, &comma.text),
+                                )
+                            }
+                            None => FormatDoc::nil(allocator),
+                        };
 
-                    let key_doc = format_with_comments(
-                        &key.leading,
-                        &key.trailing,
-                        FormatDoc::text(allocator, key.text.clone()),
-                    );
+                        let key_doc = format_with_comments(
+                            &key.leading,
+                            &key.trailing,
+                            FormatDoc::text(allocator, key.text.clone()),
+                        );
 
-                    let sep_doc = format_with_comments(
-                        &sep.leading,
-                        &sep.trailing,
-                        FormatDoc::text(allocator, sep.text.clone()),
-                    );
+                        let sep_doc = format_with_comments(
+                            &sep.leading,
+                            &sep.trailing,
+                            FormatDoc::text(allocator, sep.text.clone()),
+                        );
 
-                    let value_doc = value.format(allocator).append(comma);
+                        let value_doc = value.format(allocator).append(comma);
 
-                    let key_val_doc = if sep.kind == TokenKind::Colon {
-                        key_doc.append(sep_doc)
-                    } else {
-                        key_doc.join_space(sep_doc)
-                    };
+                        let key_val_doc = if sep.kind == TokenKind::Colon {
+                            key_doc.append(sep_doc)
+                        } else {
+                            key_doc.join_space(sep_doc)
+                        };
 
-                    key_val_doc.join_space(value_doc)
-                });
+                        key_val_doc.join_space(value_doc)
+                    },
+                );
 
                 if let Some(first) = iter.next() {
                     result = first;
