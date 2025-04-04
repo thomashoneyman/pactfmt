@@ -287,9 +287,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// Scan a string literal. Strings can be multi-line using a backslash as a
-    /// line continuation. NOTE: We currently remove the continuation, in keeping
-    /// with the Pact lexer, but we may need to preserve it if it is important
-    /// for formatting.
+    /// line continuation.
     fn scan_string_content(&mut self) -> String {
         let mut result = String::new();
 
@@ -297,55 +295,6 @@ impl<'a> Lexer<'a> {
             if ch == '"' {
                 self.advance();
                 break;
-            } else if ch == '\\' {
-                self.advance();
-
-                match self.current {
-                    Some('\n') => {
-                        // This is a line continuation - skip both the backslash and newline
-                        self.advance();
-                    }
-                    Some(' ') => {
-                        // Check if this is a line continuation with space between backslashes
-                        self.advance(); // consume the space
-                        if let Some('\\') = self.current {
-                            self.advance(); // consume the second backslash
-                            if let Some('\n') = self.current {
-                                self.advance(); // consume the newline
-                            }
-                        } else {
-                            // Not a line continuation, preserve the backslash and space
-                            result.push('\\');
-                            result.push(' ');
-                        }
-                    }
-                    Some('n') => {
-                        result.push('\n');
-                        self.advance();
-                    }
-                    Some('t') => {
-                        result.push('\t');
-                        self.advance();
-                    }
-                    Some('"') => {
-                        result.push('"');
-                        self.advance();
-                    }
-                    Some('\'') => {
-                        result.push('\'');
-                        self.advance();
-                    }
-                    Some(ch) => {
-                        // For any other escaped character, preserve both the backslash and the character
-                        result.push('\\');
-                        result.push(ch);
-                        self.advance();
-                    }
-                    None => {
-                        // Unterminated string
-                        result.push('\\');
-                    }
-                }
             } else {
                 result.push(ch);
                 self.advance();

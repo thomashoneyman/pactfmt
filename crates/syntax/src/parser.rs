@@ -166,13 +166,50 @@ fn top_level(p: &mut Parser) {
     if p.at(TokenKind::OpenParen) {
         match p.nth(1) {
             TokenKind::ModuleKeyword => module(p),
-            TokenKind::InterfaceKeyword => todo!("interface parser"),
-            TokenKind::ImportKeyword => todo!("import parser"),
+            TokenKind::InterfaceKeyword => interface(p),
+            TokenKind::ImportKeyword => import(p),
             _ => expr(p),
         }
     } else {
         expr(p);
     }
+}
+
+fn import(p: &mut Parser) {
+    assert!(p.at(TokenKind::OpenParen));
+    let m = p.open();
+
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::ImportKeyword);
+    p.expect(TokenKind::Ident);
+    if p.at(TokenKind::String) || p.at(TokenKind::Symbol) {
+        p.advance();
+    }
+    if p.at(TokenKind::OpenBracket) {
+        let m = p.open();
+        p.expect(TokenKind::OpenBracket);
+        while !p.at(TokenKind::CloseBracket) && !p.eof() {
+            untyped_name(p);
+            if p.at(TokenKind::Comma) {
+                p.advance();
+            }
+        }
+        p.expect(TokenKind::CloseBracket);
+        p.close(m, TreeKind::ImportList);
+    }
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::Import);
+}
+
+fn implements(p: &mut Parser) {
+    assert!(p.at(TokenKind::OpenParen));
+    let m = p.open();
+
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::ImplementsKeyword);
+    name(p);
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::Implements);
 }
 
 fn module(p: &mut Parser) {
@@ -184,18 +221,21 @@ fn module(p: &mut Parser) {
     p.expect(TokenKind::Ident);
 
     governance(p);
-    annotations(p);
+    module_annotations(p);
 
     while !p.at(TokenKind::CloseParen) && !p.eof() {
         if p.at(TokenKind::OpenParen) {
             match p.nth(1) {
                 TokenKind::BlessKeyword => bless(p),
+                TokenKind::ImportKeyword => import(p),
+                TokenKind::ImplementsKeyword => implements(p),
                 TokenKind::DefunKeyword => defun(p),
                 TokenKind::DefcapKeyword => defcap(p),
                 TokenKind::DefconstKeyword => defconst(p),
                 TokenKind::DefschemaKeyword => defschema(p),
                 TokenKind::DeftableKeyword => deftable(p),
                 TokenKind::DefpactKeyword => defpact(p),
+
                 _ => p.advance_with_error(&format!(
                     "expected a definition keyword but received {:?}",
                     p.nth(1)
@@ -241,7 +281,7 @@ fn defun(p: &mut Parser) {
     p.expect(TokenKind::DefunKeyword);
     name(p);
     param_list(p);
-    annotations(p);
+    module_annotations(p);
     if p.at(TokenKind::CloseParen) {
         p.advance_with_error("function body must have at least one expression");
     } else {
@@ -259,7 +299,7 @@ fn defcap(p: &mut Parser) {
     p.expect(TokenKind::DefcapKeyword);
     name(p);
     param_list(p);
-    annotations(p);
+    module_annotations(p);
     while !p.at(TokenKind::CloseParen) && !p.eof() {
         expr(p);
     }
@@ -289,7 +329,7 @@ fn defschema(p: &mut Parser) {
     p.expect(TokenKind::OpenParen);
     p.expect(TokenKind::DefschemaKeyword);
     p.expect(TokenKind::Ident);
-    annotations(p);
+    module_annotations(p);
     while !p.at(TokenKind::CloseParen) && !p.eof() {
         let m = p.open();
         p.expect(TokenKind::Ident);
@@ -314,7 +354,7 @@ fn deftable(p: &mut Parser) {
     p.expect(TokenKind::CloseBrace);
     p.close(table_name, TreeKind::TableName);
 
-    annotations(p);
+    module_annotations(p);
     p.expect(TokenKind::CloseParen);
     p.close(m, TreeKind::Deftable);
 }
@@ -325,7 +365,7 @@ fn defpact(p: &mut Parser) {
     p.expect(TokenKind::DefpactKeyword);
     name(p);
     param_list(p);
-    annotations(p);
+    module_annotations(p);
     while !p.at(TokenKind::CloseParen) && !p.eof() {
         if p.at(TokenKind::OpenParen) {
             match p.nth(1) {
@@ -353,7 +393,7 @@ fn step(p: &mut Parser) {
         name(p);
     }
     expr(p);
-    annotations(p);
+    module_annotations(p);
     p.expect(TokenKind::CloseParen);
     p.close(m, TreeKind::Step);
 }
@@ -367,7 +407,7 @@ fn step_with_rollback(p: &mut Parser) {
     }
     expr(p); // body
     expr(p); // rollback
-    annotations(p); // TODO: technically only a model annotation allowed here
+    module_annotations(p); // TODO: technically only a model annotation allowed here
     p.expect(TokenKind::CloseParen);
     p.close(m, TreeKind::StepWithRollback);
 }
@@ -402,15 +442,30 @@ fn expr(p: &mut Parser) {
             TokenKind::LetKeyword | TokenKind::LetStarKeyword => expr_let(p),
             TokenKind::LambdaKeyword => expr_lambda(p),
             TokenKind::Ident if p.tokens[p.pos + 1].text == "if" => expr_if(p),
+            TokenKind::Ident if p.tokens[p.pos + 1].text == "cond" => expr_cond(p),
+            TokenKind::Ident if p.tokens[p.pos + 1].text == "with-capability" => {
+                expr_with_capability(p)
+            }
+            TokenKind::Ident if p.tokens[p.pos + 1].text == "with-default-read" => {
+                expr_with_default_read(p)
+            }
+            TokenKind::Ident if p.tokens[p.pos + 1].text == "with-read" => expr_with_read(p),
+            TokenKind::Ident if p.tokens[p.pos + 1].text == "update" => expr_update(p),
+            TokenKind::Ident if p.tokens[p.pos + 1].text == "enforce" => expr_enforce(p),
+            TokenKind::Ident if p.tokens[p.pos + 1].text == "write" => expr_write(p),
             TokenKind::Ident => expr_app(p),
             _ => p.advance_with_error(&format!(
-                "Expected if, let, app, or lambda but received {:?}",
-                p.nth(1)
+                "Expected if, let, app, or lambda but received {:?} at line {}, column {}",
+                p.nth(1),
+                p.tokens[p.pos].range.start.line,
+                p.tokens[p.pos].range.start.column
             )),
         },
         _ => p.advance_with_error(&format!(
-            "Expected literal, '[', or '(' in expr but received {:?}",
-            p.nth(0)
+            "Expected literal, '[', or '(' in expr but received {:?} at line {}, column {}",
+            p.nth(0),
+            p.tokens[p.pos].range.start.line,
+            p.tokens[p.pos].range.start.column
         )),
     }
 }
@@ -703,17 +758,26 @@ fn parsed_name(p: &mut Parser) {
     }
 }
 
+fn module_annotations(p: &mut Parser) {
+    if p.at(TokenKind::String) && p.nth(1) != TokenKind::CloseParen {
+        p.advance();
+    }
+    at_annotations(p);
+}
+
+fn interface_annotations(p: &mut Parser) {
+    if p.at(TokenKind::String) {
+        p.advance();
+    }
+    at_annotations(p);
+}
+
 // TODO: This currently parsers all annotations and allows multiple
 // instances of the same annotation, but in practice not all annotations
 // can be used together in all contexts and any particular annotation
 // can appear at most once. We also don't parse leading strings as a
 // docstring and just assume it is part of the body.
-fn annotations(p: &mut Parser) {
-    // An initial bare string is a docstring
-    if p.at(TokenKind::String) && p.nth(1) != TokenKind::CloseParen {
-        p.advance();
-    }
-
+fn at_annotations(p: &mut Parser) {
     while p.at(TokenKind::DocAnnKeyword)
         || p.at(TokenKind::ModelAnnKeyword)
         || p.at(TokenKind::EventAnnKeyword)
@@ -909,26 +973,179 @@ fn expr_if(p: &mut Parser) {
     p.close(m, TreeKind::If);
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::lexer::tokenize;
+fn expr_cond(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::Ident); // 'cond'
 
-    #[test]
-    fn test_parse_model_annotation() {
-        let input = r#"(module my-mod GOV
-    @model
-    [ (defproperty conserves-mass
-        (= (column-delta coin-table 'balance) 0.0))
+    while !p.at(TokenKind::CloseParen) && !p.eof() {
+        if p.at(TokenKind::OpenParen) {
+            // test/body pair
+            let m = p.open();
+            p.expect(TokenKind::OpenParen);
+            expr(p); // test
+            expr(p); // body
+            p.expect(TokenKind::CloseParen);
+            p.close(m, TreeKind::CondBranch);
+        } else {
+            // default case
+            expr(p);
+            break;
+        }
+    }
 
-        (defproperty valid-account (account:string)
-        (and
-            (>= (length account) 3)
-            (<= (length account) 256)))
-    ]
-)"#;
-        let tokens = tokenize(input);
-        let parsed = parse(tokens);
-        println!("Parse tree: {:#?}", parsed);
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::Cond);
+}
+
+fn interface(p: &mut Parser) {
+    assert!(p.at(TokenKind::OpenParen));
+    let m = p.open();
+
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::InterfaceKeyword);
+    p.expect(TokenKind::Ident);
+
+    interface_annotations(p);
+
+    while !p.at(TokenKind::CloseParen) && !p.eof() {
+        if p.at(TokenKind::OpenParen) {
+            match p.nth(1) {
+                TokenKind::ImportKeyword => import(p),
+                TokenKind::DefunKeyword => if_defun(p),
+                TokenKind::DefconstKeyword => defconst(p),
+                TokenKind::DefcapKeyword => if_defcap(p),
+                TokenKind::DefschemaKeyword => defschema(p),
+                TokenKind::DefpactKeyword => if_defpact(p),
+                _ => p.advance_with_error(&format!(
+                    "expected a definition keyword but received {:?}",
+                    p.nth(1)
+                )),
+            }
+        } else {
+            p.advance_with_error("expected open paren for definition");
+        }
+    }
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::Interface);
+}
+
+fn if_defun(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::DefunKeyword);
+    name(p);
+    param_list(p);
+    interface_annotations(p);
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::IfDefun);
+}
+
+fn if_defcap(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::DefcapKeyword);
+    name(p);
+    param_list(p);
+    interface_annotations(p);
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::IfDefcap);
+}
+
+fn if_defpact(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::DefpactKeyword);
+    name(p);
+    param_list(p);
+    interface_annotations(p);
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::IfDefpact);
+}
+
+fn expr_with_capability(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::Ident); // 'with-capability'
+    expr(p); // capability expr
+
+    while !p.at(TokenKind::CloseParen) && !p.eof() {
+        expr(p);
+    }
+
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::WithCapability);
+}
+
+fn expr_with_default_read(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::Ident); // 'with-default-read'
+    parsed_name(p); // table
+    table_key(p);
+    expr_object(p); // default object
+    expr_binding(p); // binding
+
+    while !p.at(TokenKind::CloseParen) && !p.eof() {
+        expr(p);
+    }
+
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::WithDefaultRead);
+}
+
+fn expr_with_read(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::Ident); // 'with-read'
+    parsed_name(p); // table
+    table_key(p);
+    expr_binding(p);
+
+    while !p.at(TokenKind::CloseParen) && !p.eof() {
+        expr(p);
+    }
+
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::WithRead);
+}
+
+fn expr_update(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::Ident); // 'update'
+    parsed_name(p); // table
+    table_key(p);
+    expr_object(p);
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::Update);
+}
+
+fn expr_enforce(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::Ident); // 'enforce'
+    expr(p); // condition
+    expr(p); // message
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::Enforce);
+}
+
+fn expr_write(p: &mut Parser) {
+    let m = p.open();
+    p.expect(TokenKind::OpenParen);
+    p.expect(TokenKind::Ident); // 'write'
+    parsed_name(p); // table
+    table_key(p);
+    expr_object(p); // object to write
+    p.expect(TokenKind::CloseParen);
+    p.close(m, TreeKind::Write);
+}
+
+fn table_key(p: &mut Parser) {
+    if p.at(TokenKind::String) || p.at(TokenKind::Symbol) {
+        p.advance();
+    } else {
+        parsed_name(p);
     }
 }

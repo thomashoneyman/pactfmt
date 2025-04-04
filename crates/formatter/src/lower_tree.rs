@@ -8,9 +8,12 @@ pub fn lower_tree(tree: Tree) -> FST {
     match tree.kind {
         // Toplevel
         TreeKind::Module => special_form(&tree, 4),
+        TreeKind::Interface => special_form(&tree, 3),
 
         // Module body
         TreeKind::Bless => sexp(&tree),
+        TreeKind::Import => special_form(&tree, find_import_list_index_with_default(&tree, 2)),
+        TreeKind::Implements => sexp(&tree),
 
         // Defs
         TreeKind::Defun => special_form(&tree, find_param_list_index(&tree) + 1),
@@ -20,15 +23,31 @@ pub fn lower_tree(tree: Tree) -> FST {
         TreeKind::Deftable => special_form(&tree, find_table_name_index(&tree) + 1),
         TreeKind::Defpact => special_form(&tree, find_param_list_index(&tree) + 1),
 
+        // Interface defs
+        TreeKind::IfDefun => special_form(&tree, find_param_list_index(&tree) + 1),
+        TreeKind::IfDefcap => special_form(&tree, find_param_list_index(&tree) + 1),
+        TreeKind::IfDefpact => special_form(&tree, find_param_list_index(&tree) + 1),
+
         // Exprs
         TreeKind::App => sexp(&tree),
         TreeKind::List => bracket_list(&tree),
         TreeKind::Let => special_form(&tree, 3),
         TreeKind::Object => object(&tree),
         TreeKind::Binding => object(&tree),
+
+        // Specially-handled exprs
         TreeKind::If => special_form(&tree, 4),
+        TreeKind::Cond => sexp(&tree),
+        TreeKind::CondBranch => sexp(&tree),
+        TreeKind::WithCapability => special_form(&tree, 3),
+        TreeKind::WithDefaultRead => special_form(&tree, 4),
+        TreeKind::WithRead => special_form(&tree, 4),
+        TreeKind::Update => special_form(&tree, 4),
+        TreeKind::Enforce => special_form(&tree, 4),
+        TreeKind::Write => special_form(&tree, 4),
 
         // Expr parts
+        TreeKind::ImportList => bracket_list(&tree),
         TreeKind::ParamList => paren_list(&tree),
         TreeKind::BindingList => paren_list(&tree),
         TreeKind::SchemaField => compound_literal(&extract_all_tokens(&tree)),
@@ -286,6 +305,13 @@ fn find_param_list_index_with_default(tree: &Tree, default: usize) -> usize {
         .unwrap_or(default)
 }
 
+fn find_import_list_index_with_default(tree: &Tree, default: usize) -> usize {
+    tree.children
+        .iter()
+        .position(|child| matches!(child, Child::Tree(t) if t.kind == TreeKind::ImportList))
+        .unwrap_or(default)
+}
+
 // Find the index of the first schema field, e.g. in a defschema
 fn find_first_schema_field_index(tree: &Tree) -> usize {
     tree.children
@@ -305,6 +331,20 @@ fn unwrapped_annotation(tree: &Tree) -> FST {
     if tree.children.len() < 2 {
         return literals(tree);
     }
+
+    // We handle @doc annotations with multiline strings as
+    // raw nodes, to preserve the user's formatting.
+    //
+    // TODO: Actually, we don't want this, because it means that the @doc
+    // annotation itself gets moved around.
+    // match (&tree.children[0], &tree.children[1]) {
+    //     (Child::Token(first_token), Child::Token(second_token)) => {
+    //         if first_token.text == "@doc" && second_token.kind == TokenKind::String {
+    //             return FST::Raw(extract_all_tokens(tree));
+    //         }
+    //     }
+    //     _ => {}
+    // }
 
     let annotation = match &tree.children[0] {
         Child::Token(token) => FST::Literal(vec![token.clone()]),

@@ -95,21 +95,20 @@ pub enum TokenKind {
 pub enum TreeKind {
     // Top-level structure
     TopLevel,
+    Interface,
 
     // Module and interface structures
     Module,
-    Interface,
     DocAnn,
     ModelAnn,
     EventAnn,
     ManagedAnn,
 
     // External declarations
-    ExternalDecl,
-    Use,
+    Import,
     ImportList,
-    Implements,
     Bless,
+    Implements,
 
     // Definitions
     ParamList,
@@ -174,6 +173,14 @@ pub enum TreeKind {
 
     // Additional nodes we treat specially
     If,
+    Cond,
+    CondBranch,
+    WithCapability,
+    WithDefaultRead,
+    WithRead,
+    Update,
+    Enforce,
+    Write,
 
     // Error node
     ErrorTree,
