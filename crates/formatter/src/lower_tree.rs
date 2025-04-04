@@ -62,6 +62,7 @@ pub fn lower_tree(tree: Tree) -> FST {
         // Literals
         TreeKind::IntLiteral => literal_token(&tree, "integer"),
         TreeKind::DecimalLiteral => compound_literal(&extract_all_tokens(&tree)),
+        TreeKind::MultilineString => multiline_string(&tree),
 
         // Names
         TreeKind::Name => compound_literal(&extract_all_tokens(&tree)),
@@ -258,15 +259,10 @@ fn extract_token(child: &Child, expected: &str) -> SourceToken {
 // Helper function to create a literal from a token
 fn literal_token(tree: &Tree, desc: &str) -> FST {
     if tree.children.len() == 1 {
-        FST::Literal(vec![open_token(tree, desc)])
+        FST::Literal(vec![extract_token(&tree.children[0], desc)])
     } else {
         panic!("Expected single token for {}", desc);
     }
-}
-
-// Helper function to create a literal from a list of tokens
-fn literals(tree: &Tree) -> FST {
-    FST::Literal(extract_all_tokens(tree))
 }
 
 // Create a compound literal from a list of tokens (joined without spaces)
@@ -328,24 +324,6 @@ fn find_table_name_index(tree: &Tree) -> usize {
 }
 
 fn unwrapped_annotation(tree: &Tree) -> FST {
-    if tree.children.len() < 2 {
-        return literals(tree);
-    }
-
-    // We handle @doc annotations with multiline strings as
-    // raw nodes, to preserve the user's formatting.
-    //
-    // TODO: Actually, we don't want this, because it means that the @doc
-    // annotation itself gets moved around.
-    // match (&tree.children[0], &tree.children[1]) {
-    //     (Child::Token(first_token), Child::Token(second_token)) => {
-    //         if first_token.text == "@doc" && second_token.kind == TokenKind::String {
-    //             return FST::Raw(extract_all_tokens(tree));
-    //         }
-    //     }
-    //     _ => {}
-    // }
-
     let annotation = match &tree.children[0] {
         Child::Token(token) => FST::Literal(vec![token.clone()]),
         _ => panic!("Expected token for annotation name"),
@@ -360,4 +338,49 @@ fn unwrapped_annotation(tree: &Tree) -> FST {
     items.extend(content);
 
     FST::Unwrapped(items)
+}
+
+fn multiline_string(tree: &Tree) -> FST {
+    if let Child::Token(token) = &tree.children[0] {
+        // Extract the content without quotes
+        let content = if token.text.len() >= 2 {
+            &token.text[1..token.text.len() - 1]
+        } else {
+            return FST::Literal(vec![token.clone()]);
+        };
+
+        // Split on escaped newlines
+        let lines: Vec<&str> = content.split("\\\n").collect();
+
+        // Find minimum common indentation in continuation lines
+        let min_indent = lines[1..]
+            .iter()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| line.chars().take_while(|c| c.is_whitespace()).count())
+            .min()
+            .unwrap_or(0);
+
+        // Process lines, removing common indentation
+        let processed_lines: Vec<String> = lines
+            .iter()
+            .enumerate()
+            .map(|(i, line)| {
+                if i == 0 {
+                    line.to_string() // Keep first line as is
+                } else if line.len() > min_indent {
+                    line[min_indent..].to_string() // Trim common indent
+                } else {
+                    line.to_string() // Line is shorter than min_indent
+                }
+            })
+            .collect();
+
+        return FST::MultilineString {
+            leading: token.leading.clone(),
+            trailing: token.trailing.clone(),
+            lines: processed_lines,
+        };
+    }
+
+    FST::Literal(extract_all_tokens(tree))
 }

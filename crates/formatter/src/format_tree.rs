@@ -44,6 +44,11 @@ pub enum FST {
     SpecialForm(Wrapped<SpecialForm>),
     Unwrapped(Vec<FST>),
     Raw(Vec<SourceToken>),
+    MultilineString {
+        leading: Vec<Trivia>,
+        trailing: Vec<Trivia>,
+        lines: Vec<String>,
+    },
 }
 
 impl FST {
@@ -337,6 +342,43 @@ impl FST {
                 }
 
                 FormatDoc::text(allocator, raw_text)
+            }
+
+            FST::MultilineString {
+                leading,
+                trailing,
+                lines,
+            } => {
+                let mut result = format_with_comments(
+                    leading,
+                    &[],
+                    FormatDoc::text(allocator, "\"".to_string()),
+                );
+
+                if !lines.is_empty() {
+                    result = result.append(FormatDoc::text(allocator, &lines[0]));
+                }
+
+                // For all lines except the first, join with a backslash
+                // and hardline. This replicates the input string but with
+                // adjusted indentation.
+                for line in &lines[1..] {
+                    result = result
+                        .append(FormatDoc::text(allocator, "\\"))
+                        .join_hardline(FormatDoc::text(allocator, line));
+                }
+
+                if !trailing.is_empty() {
+                    result = result.append(format_with_comments(
+                        &[],
+                        trailing,
+                        FormatDoc::text(allocator, "\"".to_string()),
+                    ));
+                } else {
+                    result = result.append(FormatDoc::text(allocator, "\"".to_string()));
+                }
+
+                result.group()
             }
         }
     }

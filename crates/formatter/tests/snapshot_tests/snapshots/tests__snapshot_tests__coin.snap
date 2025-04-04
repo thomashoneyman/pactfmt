@@ -189,8 +189,8 @@ expression: "format_source(content, 80).unwrap()"
   (defun validate-account (account:string)
     @doc
       "Enforce that an account name conforms to the coin contract \
-           \minimum and maximum length requirements, as well as the    \
-           \latin-1 character set."
+      \minimum and maximum length requirements, as well as the    \
+      \latin-1 character set."
 
     (enforce
       (is-charset COIN_CHARSET account)
@@ -452,7 +452,7 @@ expression: "format_source(content, 80).unwrap()"
   (defun remediate:string (account:string amount:decimal)
     @doc
       "Allows for remediation transactions. This function \
-           \is protected by the REMEDIATE capability"
+      \is protected by the REMEDIATE capability"
     @model
       [
         (property (valid-account account))
@@ -574,8 +574,8 @@ expression: "format_source(content, 80).unwrap()"
 
   (defun check-reserved:string (account:string)
     " Checks ACCOUNT for reserved name and returns type if \
-      \ found or empty string. Reserved names start with a \
-      \ single char and colon, e.g. 'c:foo', which would return 'c' as type."
+    \ found or empty string. Reserved names start with a \
+    \ single char and colon, e.g. 'c:foo', which would return 'c' as type."
     (let ((pfx (take 2 account)))
       (if (= ":" (take -1 pfx)) (take 1 pfx) "")
     )
@@ -701,8 +701,8 @@ expression: "format_source(content, 80).unwrap()"
 
     @doc
       "Add an entry to the coin allocation table. This function \
-           \also creates a corresponding empty coin contract account \
-           \of the same name and guard. Requires GENESIS capability. "
+      \also creates a corresponding empty coin contract account \
+      \of the same name and guard. Requires GENESIS capability. "
 
     @model [(property (valid-account account))]
 
@@ -737,8 +737,8 @@ expression: "format_source(content, 80).unwrap()"
 
     @doc
       "Release funds associated with allocation ACCOUNT into main ledger.   \
-           \ACCOUNT must already exist in main ledger. Allocation is deactivated \
-           \after release."
+      \ACCOUNT must already exist in main ledger. Allocation is deactivated \
+      \after release."
     @model [(property (valid-account account))]
 
     (validate-account account)

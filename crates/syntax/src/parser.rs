@@ -424,9 +424,23 @@ fn resume(p: &mut Parser) {
     p.close(m, TreeKind::Resume);
 }
 
+fn string_literal(p: &mut Parser) {
+    assert!(p.at(TokenKind::String) || p.at(TokenKind::Symbol));
+    if p.at(TokenKind::Symbol) {
+        p.advance();
+    } else if p.tokens[p.pos].text.contains("\\\n") {
+        let m = p.open();
+        p.advance();
+        p.close(m, TreeKind::MultilineString);
+    } else {
+        p.advance();
+    }
+}
+
 fn expr(p: &mut Parser) {
     match p.nth(0) {
-        TokenKind::Bool | TokenKind::String | TokenKind::Symbol => p.advance(),
+        TokenKind::Bool => p.advance(),
+        TokenKind::String | TokenKind::Symbol => string_literal(p),
         TokenKind::Ident => parsed_name(p),
         TokenKind::Number => expr_number(p),
         TokenKind::OpenBracket => expr_list(p),
@@ -547,7 +561,7 @@ fn expr_object(p: &mut Parser) {
     p.expect(TokenKind::OpenBrace);
     while !p.at(TokenKind::CloseBrace) && !p.eof() {
         if p.at(TokenKind::String) || p.at(TokenKind::Symbol) {
-            p.advance();
+            string_literal(p);
             p.expect(TokenKind::Colon);
             expr(p);
             if !p.at(TokenKind::CloseBrace) {
@@ -566,7 +580,7 @@ fn expr_binding(p: &mut Parser) {
     p.expect(TokenKind::OpenBrace);
     while !p.at(TokenKind::CloseBrace) && !p.eof() {
         if p.at(TokenKind::String) || p.at(TokenKind::Symbol) {
-            p.advance();
+            string_literal(p);
             p.expect(TokenKind::BindAssign);
             name(p);
             if !p.at(TokenKind::CloseBrace) {
@@ -760,14 +774,14 @@ fn parsed_name(p: &mut Parser) {
 
 fn module_annotations(p: &mut Parser) {
     if p.at(TokenKind::String) && p.nth(1) != TokenKind::CloseParen {
-        p.advance();
+        string_literal(p);
     }
     at_annotations(p);
 }
 
 fn interface_annotations(p: &mut Parser) {
     if p.at(TokenKind::String) {
-        p.advance();
+        string_literal(p);
     }
     at_annotations(p);
 }
@@ -796,7 +810,13 @@ fn at_annotations(p: &mut Parser) {
 fn doc_ann(p: &mut Parser) {
     let m = p.open();
     p.expect(TokenKind::DocAnnKeyword);
-    p.expect(TokenKind::String);
+
+    if p.at(TokenKind::String) {
+        string_literal(p);
+    } else {
+        p.advance_with_error("Expected string after @doc");
+    }
+
     p.close(m, TreeKind::DocAnn);
 }
 
@@ -1144,7 +1164,7 @@ fn expr_write(p: &mut Parser) {
 
 fn table_key(p: &mut Parser) {
     if p.at(TokenKind::String) || p.at(TokenKind::Symbol) {
-        p.advance();
+        string_literal(p);
     } else {
         parsed_name(p);
     }

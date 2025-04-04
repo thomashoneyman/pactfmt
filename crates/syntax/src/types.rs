@@ -158,6 +158,7 @@ pub enum TreeKind {
     // Literals
     IntLiteral,
     DecimalLiteral,
+    MultilineString,
 
     // Names
     Name,
