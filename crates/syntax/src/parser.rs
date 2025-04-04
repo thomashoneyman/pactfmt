@@ -1165,7 +1165,11 @@ fn expr_write(p: &mut Parser) {
 fn table_key(p: &mut Parser) {
     if p.at(TokenKind::String) || p.at(TokenKind::Symbol) {
         string_literal(p);
-    } else {
+    } else if p.at(TokenKind::Ident) {
         parsed_name(p);
+    } else if p.at(TokenKind::OpenParen) {
+        expr(p);
+    } else {
+        p.advance_with_error("expected string, symbol, identifier, or s-exp");
     }
 }
