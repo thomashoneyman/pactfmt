@@ -410,6 +410,12 @@ where
         })
     }
 
+    /// Joins with a hardline
+    pub fn join_hardline(self, other: Self) -> Self {
+        let allocator = self.doc.0;
+        join_docs(self, other, |_, doc| allocator.hardline().append(doc))
+    }
+
     pub fn group(self) -> Self {
         Self {
             doc: self.doc.group(),
