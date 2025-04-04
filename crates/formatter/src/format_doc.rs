@@ -343,7 +343,43 @@ where
     }
 
     pub fn pretty(self, width: usize) -> String {
-        self.docbuilder().pretty(width).to_string()
+        let formatted = self.docbuilder().pretty(width).to_string();
+
+        // We have to manually trim spaces from lines followed by a newline
+        // because `pretty` always adds spaces as indentation.
+        // https://github.com/Marwes/pretty.rs/issues/85
+        let mut result = String::with_capacity(formatted.len());
+        let mut last_pos = 0;
+
+        for (i, c) in formatted.char_indices() {
+            if c == '\n' {
+                let line = &formatted[last_pos..i];
+                let trimmed = line.trim_end();
+                result.push_str(trimmed);
+                result.push('\n');
+                last_pos = i + 1;
+            }
+        }
+
+        // We need special handling for the last line because the loop above
+        // only processes lines that end with a newline character.
+        // If the formatted string doesn't end with a newline, we need to
+        // manually process the remaining text after the last newline.
+        if last_pos < formatted.len() {
+            let last_line = &formatted[last_pos..].trim_end();
+            result.push_str(last_line);
+        }
+
+        // Ensure the file ends with exactly one newline
+        if result.ends_with('\n') {
+            while result.ends_with("\n\n") {
+                result.pop();
+            }
+        } else {
+            result.push('\n');
+        }
+
+        result
     }
 
     pub fn append(self, other: Self) -> Self {

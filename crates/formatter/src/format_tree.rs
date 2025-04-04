@@ -1,7 +1,3 @@
-/// TODO:
-///   - add 'raw' FST node, which takes a list of tokens and
-///     just prints them out using basic RcDoc primitives, including
-///     faithfully reproducing trivia.
 use crate::format_doc::{doc_is_nil, format_with_comments, FormatDoc};
 use pretty::DocAllocator;
 use syntax::types::{SourceToken, TokenKind, Trivia};
@@ -47,6 +43,7 @@ pub enum FST {
     SExp(Wrapped<Vec<FST>>),
     SpecialForm(Wrapped<SpecialForm>),
     Unwrapped(Vec<FST>),
+    Raw(Vec<SourceToken>),
 }
 
 impl FST {
@@ -310,6 +307,36 @@ impl FST {
                 }
 
                 result.nest(2).group()
+            }
+
+            FST::Raw(tokens) => {
+                if tokens.is_empty() {
+                    return FormatDoc::nil(allocator);
+                }
+
+                let mut raw_text = String::new();
+
+                for token in tokens {
+                    for trivia in &token.leading {
+                        match trivia {
+                            Trivia::Space(s) => raw_text.push_str(&" ".repeat(*s)),
+                            Trivia::Line(n) => raw_text.push_str(&"\n".repeat(*n)),
+                            Trivia::Comment(text) => raw_text.push_str(text),
+                        }
+                    }
+
+                    raw_text.push_str(&token.text);
+
+                    for trivia in &token.trailing {
+                        match trivia {
+                            Trivia::Space(s) => raw_text.push_str(&" ".repeat(*s)),
+                            Trivia::Line(n) => raw_text.push_str(&"\n".repeat(*n)),
+                            Trivia::Comment(text) => raw_text.push_str(text),
+                        }
+                    }
+                }
+
+                FormatDoc::text(allocator, raw_text)
             }
         }
     }

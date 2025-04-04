@@ -129,24 +129,30 @@ fn format_tokens_for_comparison(tokens: &[SourceToken]) -> Vec<String> {
             // Literals
             TokenKind::Ident => format!("ident<{}>", token.text),
             TokenKind::Number => format!("number<{}>", token.text),
-            TokenKind::String => format!("\"{}\"", token.text.trim_matches('"')),
+            TokenKind::String => format!("\"{}\"", filter_escapes(token.text.trim_matches('"'))),
             TokenKind::Symbol => format!("'{}", token.text.trim_start_matches('\'')),
             TokenKind::Bool => token.text.clone(),
-
-            // Keywords not reserved in the Pact lexer, but reserved in the parser
-            // TokenKind::WithCapabilityKeyword => "ident<with-capability>".to_string(),
-            // TokenKind::WithReadKeyword => "ident<with-read>".to_string(),
-            // TokenKind::WithDefaultReadKeyword => "ident<with-default-read>".to_string(),
-            // TokenKind::EnforceKeyword => "ident<enforce>".to_string(),
-            // TokenKind::IfKeyword => "ident<if>".to_string(),
-            // TokenKind::CondKeyword => "ident<cond>".to_string(),
-            // TokenKind::DoKeyword => "ident<do>".to_string(),
 
             // Special tokens
             TokenKind::Eof => "eof".to_string(),
             TokenKind::Error => format!("error<{}>", token.text),
         })
         .collect()
+}
+
+// The Pact lexer trims out escape sequences, but we have them in our lexer.
+fn filter_escapes(text: &str) -> String {
+    let mut result = String::new();
+    let chars: Vec<char> = text.chars().collect();
+    let mut inside_backslash_pair = false;
+    for c in chars {
+        if c == '\\' {
+            inside_backslash_pair = !inside_backslash_pair;
+        } else if !inside_backslash_pair {
+            result.push(c);
+        }
+    }
+    result
 }
 
 /// Extract the first output section from the Pact lexer debug output

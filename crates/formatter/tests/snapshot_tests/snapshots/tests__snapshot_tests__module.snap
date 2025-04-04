@@ -4,7 +4,7 @@ expression: "format_source(content, 80).unwrap()"
 ---
 (module my-mod GOV
   (defcap GOV () true)
-  
+
   (defun wot:integer
     (
       a:string
@@ -15,7 +15,7 @@ expression: "format_source(content, 80).unwrap()"
     @model []
     (+ 1 b)
   )
-  
+
   (defun wot2:[[integer]] (a b)
     [
       1,
