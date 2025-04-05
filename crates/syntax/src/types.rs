@@ -1,10 +1,10 @@
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct SourcePos {
     pub line: usize,
     pub column: usize,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct SourceRange {
     pub start: SourcePos,
     pub end: SourcePos,
@@ -31,6 +31,14 @@ pub struct SourceToken {
     pub leading: Vec<Trivia>,  // Whitespace/comments before this token
     pub trailing: Vec<Trivia>, // Whitespace/comments after this token
 }
+
+// token
+// error_tree <- error message
+//   error_token_zero_width <-
+// error_tree <- message
+//   error_tok <- source ranges
+//   error_tok <- source ranges
+// token
 
 /// Tokens, enumerated from the Pact lexer:
 /// https://github.com/kadena-io/pact-5/blob/master/pact/Pact/Core/Syntax/Lexer.x

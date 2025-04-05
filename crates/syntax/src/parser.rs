@@ -10,6 +10,8 @@ use std::cell::Cell;
 enum Event {
     Open { kind: TreeKind },
     Close,
+    Error { message: String },
+    ErrorToken,
     Advance,
 }
 
@@ -27,6 +29,7 @@ struct Parser {
     /// Simplifies debugging by terminating the parser if it loops.
     fuel: Cell<u32>,
     events: Vec<Event>,
+    recovery_token: Option<(TokenKind, TokenKind)>,
 }
 
 /// Basic parser methods
@@ -81,30 +84,77 @@ impl Parser {
     }
 
     fn expect(&mut self, kind: TokenKind) {
+        if let Some((open, close)) = self.recovery_token {
+            self.expect_until_close_or_eof(kind, open, close);
+        } else {
+            self.expect_original(kind);
+        }
+    }
+
+    fn expect_original(&mut self, kind: TokenKind) {
         if self.eat(kind) {
             return;
         }
-        // TODO: Error reporting.
-        eprintln!(
-            "expected {:?} but received {:?} at line {}, column {}",
-            kind,
-            self.nth(0),
-            self.tokens[self.pos].range.start.line,
-            self.tokens[self.pos].range.start.column
-        );
+        let mark = self.open();
+        // error-tree
+        self.events.push(Event::Error {
+            message: format!("Expected {:?} but received {:?}", kind, self.nth(0)),
+        });
+        // error-token-with-zero-width
+        self.events.push(Event::ErrorToken);
+        self.close(mark, TreeKind::ErrorTree);
+    }
+
+    fn expect_until_close_or_eof(&mut self, kind: TokenKind, open: TokenKind, close: TokenKind) {
+        if self.eat(kind) {
+            return;
+        }
+
+        let mark = self.open();
+        let mut depth = 0;
+
+        self.events.push(Event::Error {
+            message: format!("Expected {:?} but received {:?}", kind, self.nth(0)),
+        });
+
+        while !self.at(TokenKind::Eof) {
+            if self.at(open) {
+                depth += 1;
+            } else if self.at(close) {
+                if depth == 0 {
+                    break;
+                } else {
+                    depth -= 1;
+                }
+            }
+            self.advance();
+        }
+
+        self.close(mark, TreeKind::ErrorTree);
+    }
+
+    fn with_recovery(&mut self, open: TokenKind, close: TokenKind, mut p: impl FnMut(&mut Parser)) {
+        self.recovery_token = Some((open, close));
+        p(self);
+        self.recovery_token = None;
     }
 
     fn advance_with_error(&mut self, error: &str) {
         let mark = self.open();
-        eprintln!("{error}");
+        self.events.push(Event::Error {
+            message: error.to_string(),
+            // self.pos,
+        });
         self.advance();
         self.close(mark, TreeKind::ErrorTree);
     }
 }
 
 impl Parser {
-    fn build_trees(self) -> Vec<Tree> {
-        let mut tokens = self.tokens.into_iter();
+    fn build_trees(self) -> (Vec<Tree>, Vec<String>) {
+        let mut tokens = self.tokens.into_iter().peekable();
+        let mut errors = vec![];
+
         let events = self.events;
         let mut stack = Vec::new(); // in-progress trees
         let mut result = Vec::new(); // completed trees
@@ -129,6 +179,25 @@ impl Parser {
                     }
                 }
 
+                Event::Error { message } => {
+                    errors.push(message);
+                }
+
+                Event::ErrorToken => {
+                    // Steals the range from the current token
+                    let mut range = tokens.peek().unwrap().range;
+                    range.end = range.start;
+
+                    let token = SourceToken {
+                        kind: TokenKind::Error,
+                        text: "".to_string(),
+                        range,
+                        leading: vec![],
+                        trailing: vec![],
+                    };
+                    stack.last_mut().unwrap().children.push(Child::Token(token));
+                }
+
                 // This token is part of the current tree
                 Event::Advance => {
                     let token = tokens.next().unwrap();
@@ -145,16 +214,17 @@ impl Parser {
             }) | None
         ));
 
-        result
+        (result, errors)
     }
 }
 
-pub fn parse(tokens: Vec<SourceToken>) -> Vec<Tree> {
+pub fn parse(tokens: Vec<SourceToken>) -> (Vec<Tree>, Vec<String>) {
     let mut p = Parser {
         tokens,
         pos: 0,
         fuel: Cell::new(256),
         events: Vec::new(),
+        recovery_token: None,
     };
     while !p.eof() {
         top_level(&mut p);
@@ -170,6 +240,9 @@ fn top_level(p: &mut Parser) {
             TokenKind::ImportKeyword => import(p),
             _ => expr(p),
         }
+        // while not at close paren
+        // create an error tree
+        // advance tokens
     } else {
         expr(p);
     }
@@ -212,41 +285,78 @@ fn implements(p: &mut Parser) {
     p.close(m, TreeKind::Implements);
 }
 
+// fn module_outer(p: &mut Parser) {
+//     // (module inner <> 123 123 </> ) (defun )
+// }
+//
+// fn module_inner(p: &mut Parser) {
+//     // (module <invalid> 123 123 </invalid>) <- able to recover
+//     //
+//     // (module 123 </eof> <- unable to recover
+//     //
+//     // (module <invalid> 123 (defun abc </invalid> )
+//     //
+//     // able to recover, but not at the ideal point
+//     // because after the recovering close paren, the
+//     // parser would expect more modules rather than defun
+//     //
+//     // (module <invalid> 123 (defun abc </invalid> ) (defun def )
+//     //
+//     // thus if there's more defun, then you'll run into even
+//     // more errors.
+//     //
+//     // ModuleExpr
+//     //   OpenParen
+//     //   ModuleKw
+//     //   ErrorTree
+//     //     ErrorToken
+//     //     ErrorToken
+//     //   CloseParen
+//     //
+//     // (module 123 123 )
+//
+//     p.with_recovery(|p| {});
+//
+//     p.expect(TokenKind::Ident);
+// }
+
 fn module(p: &mut Parser) {
-    assert!(p.at(TokenKind::OpenParen));
-    let m = p.open();
+    p.with_recovery(TokenKind::OpenParen, TokenKind::CloseParen, |p| {
+        assert!(p.at(TokenKind::OpenParen));
+        let m = p.open();
 
-    p.expect(TokenKind::OpenParen);
-    p.expect(TokenKind::ModuleKeyword);
-    p.expect(TokenKind::Ident);
+        p.expect(TokenKind::OpenParen);
+        p.expect(TokenKind::ModuleKeyword);
+        p.expect(TokenKind::Ident);
 
-    governance(p);
-    module_annotations(p);
+        governance(p);
+        module_annotations(p);
 
-    while !p.at(TokenKind::CloseParen) && !p.eof() {
-        if p.at(TokenKind::OpenParen) {
-            match p.nth(1) {
-                TokenKind::BlessKeyword => bless(p),
-                TokenKind::ImportKeyword => import(p),
-                TokenKind::ImplementsKeyword => implements(p),
-                TokenKind::DefunKeyword => defun(p),
-                TokenKind::DefcapKeyword => defcap(p),
-                TokenKind::DefconstKeyword => defconst(p),
-                TokenKind::DefschemaKeyword => defschema(p),
-                TokenKind::DeftableKeyword => deftable(p),
-                TokenKind::DefpactKeyword => defpact(p),
+        while !p.at(TokenKind::CloseParen) && !p.eof() {
+            if p.at(TokenKind::OpenParen) {
+                match p.nth(1) {
+                    TokenKind::BlessKeyword => bless(p),
+                    TokenKind::ImportKeyword => import(p),
+                    TokenKind::ImplementsKeyword => implements(p),
+                    TokenKind::DefunKeyword => defun(p),
+                    TokenKind::DefcapKeyword => defcap(p),
+                    TokenKind::DefconstKeyword => defconst(p),
+                    TokenKind::DefschemaKeyword => defschema(p),
+                    TokenKind::DeftableKeyword => deftable(p),
+                    TokenKind::DefpactKeyword => defpact(p),
 
-                _ => p.advance_with_error(&format!(
-                    "expected a definition keyword but received {:?}",
-                    p.nth(1)
-                )),
+                    _ => p.advance_with_error(&format!(
+                        "expected a definition keyword but received {:?}",
+                        p.nth(1)
+                    )),
+                }
+            } else {
+                p.advance_with_error("expected open paren for definition or external decl");
             }
-        } else {
-            p.advance_with_error("expected open paren for definition or external decl");
         }
-    }
-    p.expect(TokenKind::CloseParen);
-    p.close(m, TreeKind::Module);
+        p.expect(TokenKind::CloseParen);
+        p.close(m, TreeKind::Module);
+    });
 }
 
 fn governance(p: &mut Parser) {
