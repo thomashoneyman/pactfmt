@@ -4,93 +4,182 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>pactfmt</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>">
+  <link rel="shortcut icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔗</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lz-string@1.4.4/libs/lz-string.min.js"></script>
   <style>
-    body {
-      font-family: system-ui, sans-serif;
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 20px;
-    }
-    .container {
-      display: flex;
-      gap: 20px;
-    }
-    .pane {
-      flex: 1;
-    }
-    textarea {
-      width: 100%;
-      height: 400px;
-      font-family: monospace;
-      padding: 8px;
-      box-sizing: border-box;
-      resize: vertical;
-    }
-    h2 {
-      margin-top: 0;
-    }
+    html, body { height: 100%; margin: 0; }
   </style>
-</head>
-<body>
-  <h1>pactfmt</h1>
+  <script>
+    document.addEventListener('alpine:init', () => {
+      Alpine.data('formatter', () => ({
+        input: '',
+        output: '',
+        outputMode: 'formatter',
+        wasmInitialized: false,
+        shareButtonText: 'Copy Share URL',
 
-  <div class="container">
-    <div class="pane">
-      <h2>Input</h2>
-      <textarea id="input" placeholder="Type something to format..."></textarea>
-    </div>
-    <div class="pane">
-      <h2>Formatted Output</h2>
-      <textarea id="output" readonly></textarea>
+        init() {
+          this.$watch('input', value => {
+            if (window.inputTimeout) clearTimeout(window.inputTimeout);
+            window.inputTimeout = setTimeout(() => this.updateOutput(), 300);
+          });
+
+          window.setWasmInitialized = () => {
+            this.wasmInitialized = true;
+            this.loadFromUrl();
+            if (this.input && !window.location.hash) this.updateOutput();
+          };
+        },
+
+        async updateOutput() {
+          if (!this.wasmInitialized) {
+            this.output = 'WASM module not initialized yet';
+            return;
+          }
+
+          if (this.input && this.input.trim() !== '') {
+            try {
+              this.output = await window.formatInput(this.input);
+              this.updateUrl();
+            } catch (error) {
+              console.error('Format error:', error);
+              this.output = 'Error: ' + error.message;
+            }
+          } else {
+            this.output = '';
+            this.updateUrl();
+          }
+        },
+
+        updateUrl() {
+          if (this.input) {
+            const compressed = LZString.compressToEncodedURIComponent(this.input);
+            const url = new URL(window.location.href);
+            url.hash = compressed;
+            window.history.replaceState({}, '', url.toString());
+          } else {
+            const url = new URL(window.location.href);
+            url.hash = '';
+            window.history.replaceState({}, '', url.toString());
+          }
+        },
+
+        loadFromUrl() {
+          if (window.location.hash) {
+            try {
+              const compressed = window.location.hash.substring(1);
+              const decompressed = LZString.decompressFromEncodedURIComponent(compressed);
+              if (decompressed) {
+                this.input = decompressed;
+                this.updateOutput();
+              }
+            } catch (error) {
+              console.error('Failed to load from URL:', error);
+            }
+          }
+        },
+
+        copyShareUrl() {
+          navigator.clipboard.writeText(window.location.href)
+            .then(() => {
+              this.shareButtonText = 'Copied!';
+              setTimeout(() => {
+                this.shareButtonText = 'Copy Share URL';
+              }, 2000);
+            })
+            .catch(err => {
+              console.error('Failed to copy URL:', err);
+              this.shareButtonText = 'Failed to copy';
+              setTimeout(() => {
+                this.shareButtonText = 'Copy Share URL';
+              }, 2000);
+            });
+        }
+      }));
+    });
+  </script>
+</head>
+<body class="bg-gray-50 font-mono">
+  <div x-data="formatter" class="flex flex-col h-screen">
+    <header class="bg-white border-b border-gray-200 p-4 flex justify-between items-center">
+      <h1 class="text-2xl font-mono text-gray-800">pactfmt</h1>
+      <div class="flex items-center space-x-4">
+        <button
+          @click="copyShareUrl"
+          class="px-3 py-1 rounded text-sm bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center"
+          x-text="shareButtonText"
+        ></button>
+        <div class="flex items-center space-x-2">
+          <span class="text-gray-700 mr-2">Output mode:</span>
+          <template x-for="mode in ['formatter', 'lexer', 'parser']">
+            <button
+              class="px-3 py-1 rounded text-sm"
+              :class="outputMode === mode ? 'bg-green-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-200'"
+              x-on:click="outputMode = mode"
+              x-text="mode"
+            ></button>
+          </template>
+        </div>
+      </div>
+    </header>
+
+    <div class="flex flex-1 overflow-hidden">
+      <div class="w-1/2 flex flex-col h-full border-r border-gray-200">
+        <div class="p-4 border-b border-gray-200 bg-white">
+          <h2 class="text-lg font-mono text-gray-700">Input</h2>
+        </div>
+        <div class="flex-1 overflow-hidden">
+          <textarea
+            class="w-full h-full p-4 font-mono text-gray-800 bg-gray-50 resize-none focus:outline-none"
+            placeholder="Type something to format..."
+            x-model="input"
+          ></textarea>
+        </div>
+      </div>
+
+      <div class="w-1/2 flex flex-col h-full">
+        <div class="p-4 border-b border-gray-200 bg-white">
+          <h2 class="text-lg font-mono text-gray-700" x-text="`Output (${outputMode})`"></h2>
+        </div>
+        <div class="flex-1 overflow-hidden">
+          <textarea
+            class="w-full h-full p-4 font-mono text-gray-800 bg-gray-50 resize-none focus:outline-none"
+            readonly
+            x-text="output"
+          ></textarea>
+        </div>
+      </div>
     </div>
   </div>
 
   <script type="module">
     import init, { format } from './pkg/pactfmt_docs.js';
 
-    let initialized = false;
-    const inputTextarea = document.getElementById('input');
-    const outputTextarea = document.getElementById('output');
+    window.formatInput = async function(input) {
+      try {
+        return format(input);
+      } catch (error) {
+        console.error('Format error:', error);
+        return 'Error: ' + error.message;
+      }
+    };
 
     async function initWasm() {
       try {
         await init();
-        initialized = true;
-        if (inputTextarea.value) {
-          formatText();
+        if (window.setWasmInitialized) {
+          window.setWasmInitialized();
         }
       } catch (error) {
         console.error('Failed to initialize WASM:', error);
-        outputTextarea.value = 'Error initializing WASM: ' + error.message;
-      }
-    }
-
-    function formatText() {
-      if (!initialized) {
-        outputTextarea.value = 'WASM module not initialized yet';
-        return;
-      }
-
-      if (inputTextarea.value.trim() !== '') {
-        try {
-          const formatted = format(inputTextarea.value);
-          outputTextarea.value = formatted;
-        } catch (error) {
-          console.error('Format error:', error);
-          outputTextarea.value = 'Error: ' + error.message;
-        }
-      } else {
-        outputTextarea.value = '';
+        return 'Error initializing WASM: ' + error.message;
       }
     }
 
     initWasm();
-
-    let timeout;
-    inputTextarea.addEventListener('keyup', () => {
-      clearTimeout(timeout);
-      timeout = setTimeout(formatText, 300);
-    });
   </script>
 </body>
 </html>
