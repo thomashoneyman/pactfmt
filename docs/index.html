@@ -27,6 +27,10 @@
             window.inputTimeout = setTimeout(() => this.updateOutput(), 300);
           });
 
+          this.$watch('outputMode', value => {
+            this.updateOutput();
+          });
+
           window.setWasmInitialized = () => {
             this.wasmInitialized = true;
             this.loadFromUrl();
@@ -42,11 +46,11 @@
 
           if (this.input && this.input.trim() !== '') {
             try {
-              this.output = await window.formatInput(this.input);
+              this.output = await window.processInput(this.input, this.outputMode);
               this.updateUrl();
             } catch (error) {
-              console.error('Format error:', error);
-              this.output = 'Error: ' + error.message;
+              console.error('Processing error:', error);
+              this.output = error.message;
             }
           } else {
             this.output = '';
@@ -55,19 +59,25 @@
         },
 
         updateUrl() {
+          const url = new URL(window.location.href);
           if (this.input) {
             const compressed = LZString.compressToEncodedURIComponent(this.input);
-            const url = new URL(window.location.href);
             url.hash = compressed;
-            window.history.replaceState({}, '', url.toString());
           } else {
-            const url = new URL(window.location.href);
             url.hash = '';
-            window.history.replaceState({}, '', url.toString());
           }
+          url.searchParams.set('mode', this.outputMode);
+          window.history.replaceState({}, '', url.toString());
         },
 
         loadFromUrl() {
+          const urlParams = new URLSearchParams(window.location.search);
+          const mode = urlParams.get('mode');
+          const validModes = ['lexer', 'parser', 'formatter'];
+          if (mode && validModes.includes(mode)) {
+            this.outputMode = mode;
+          }
+
           if (window.location.hash) {
             try {
               const compressed = window.location.hash.substring(1);
@@ -113,8 +123,8 @@
           x-text="shareButtonText"
         ></button>
         <div class="flex items-center space-x-2">
-          <span class="text-gray-700 mr-2">Output mode:</span>
-          <template x-for="mode in ['formatter', 'lexer', 'parser']">
+          <span class="text-gray-700">Output mode:</span>
+          <template x-for="mode in ['lexer', 'parser', 'formatter']">
             <button
               class="px-3 py-1 rounded text-sm"
               :class="outputMode === mode ? 'bg-green-600 text-white' : 'bg-white text-gray-700 hover:bg-gray-200'"
@@ -156,14 +166,23 @@
   </div>
 
   <script type="module">
-    import init, { format } from './pkg/pactfmt_docs.js';
+    import init, { format, lex, parse } from './pkg/pactfmt_docs.js';
 
-    window.formatInput = async function(input) {
+    window.processInput = async function(input, mode) {
       try {
-        return format(input);
+        switch (mode) {
+          case 'lexer':
+            return lex(input);
+          case 'parser':
+            return parse(input);
+          case 'formatter':
+            return format(input);
+          default:
+            return 'Unknown mode';
+        }
       } catch (error) {
-        console.error('Format error:', error);
-        return 'Error: ' + error.message;
+        console.error('Processing error:', error);
+        return error.message;
       }
     };
 

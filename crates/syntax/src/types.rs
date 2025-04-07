@@ -32,6 +32,20 @@ pub struct SourceToken {
     pub trailing: Vec<Trivia>, // Whitespace/comments after this token
 }
 
+impl SourceToken {
+    pub fn format_condensed(&self) -> String {
+        format!(
+            "{:?}@{}:{}..{}:{} {:?}",
+            self.kind,
+            self.range.start.line,
+            self.range.start.column,
+            self.range.end.line,
+            self.range.end.column,
+            self.text
+        )
+    }
+}
+
 /// Tokens, enumerated from the Pact lexer:
 /// https://github.com/kadena-io/pact-5/blob/master/pact/Pact/Core/Syntax/Lexer.x
 /// and the Pact parser:
@@ -193,6 +207,12 @@ pub struct Tree {
     pub children: Vec<Child>,
 }
 
+#[derive(Debug, PartialEq, Clone)]
+pub enum Child {
+    Token(SourceToken),
+    Tree(Tree),
+}
+
 impl Tree {
     pub fn has_errors(&self) -> bool {
         if self.kind == TreeKind::ErrorTree {
@@ -209,10 +229,62 @@ impl Tree {
 
         false
     }
-}
 
-#[derive(Debug, PartialEq, Clone)]
-pub enum Child {
-    Token(SourceToken),
-    Tree(Tree),
+    pub fn format_condensed(&self) -> String {
+        let mut result = String::new();
+        self.format_condensed_internal(0, &mut result);
+        result
+    }
+
+    fn format_condensed_internal(&self, indent: usize, output: &mut String) {
+        let range = self.get_tree_range();
+        output.push_str(&format!(
+            "{}{:?}@{}:{}..{}:{}\n",
+            "  ".repeat(indent),
+            self.kind,
+            range.start.line,
+            range.start.column,
+            range.end.line,
+            range.end.column
+        ));
+
+        for child in &self.children {
+            match child {
+                Child::Tree(subtree) => {
+                    subtree.format_condensed_internal(indent + 1, output);
+                }
+                Child::Token(token) => {
+                    output.push_str(&format!(
+                        "{}{}\n",
+                        "  ".repeat(indent + 1),
+                        token.format_condensed()
+                    ));
+                }
+            }
+        }
+    }
+
+    fn get_tree_range(&self) -> SourceRange {
+        if self.children.is_empty() {
+            return SourceRange {
+                start: SourcePos { line: 0, column: 0 },
+                end: SourcePos { line: 0, column: 0 },
+            };
+        }
+
+        let first_child = &self.children[0];
+        let last_child = &self.children[self.children.len() - 1];
+
+        let start = match first_child {
+            Child::Token(token) => token.range.start.clone(),
+            Child::Tree(subtree) => subtree.get_tree_range().start,
+        };
+
+        let end = match last_child {
+            Child::Token(token) => token.range.end.clone(),
+            Child::Tree(subtree) => subtree.get_tree_range().end,
+        };
+
+        SourceRange { start, end }
+    }
 }

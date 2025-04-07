@@ -1,7 +1,3 @@
-/// TODO:
-///   - widen error trees such that an error continues until
-///     some recoverable syntax (like an open paren) is found
-///   - record errors in the parser, as purescript-analyzer does
 use crate::types::{Child, SourceToken, TokenKind, Tree, TreeKind};
 use std::cell::Cell;
 
