@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/thomashoneyman/pactfmt/actions/workflows/ci.yaml/badge.svg)](https://github.com/thomashoneyman/pactfmt/actions/workflows/ci.yaml)
 
-A formatter for Pact source files.
+A formatter for Pact source files. Online demo: [thomashoneyman.github.io/pactfmt](https://thomashoneyman.github.io/pactfmt).
 
 ## Installation
 
