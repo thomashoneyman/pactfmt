@@ -1,10 +1,9 @@
 use crate::types::{SourcePos, SourceRange, SourceToken, TokenKind, Trivia};
-use std::iter::Peekable;
 use std::str::Chars;
 
 pub struct Lexer<'a> {
     /// Source input
-    input: Peekable<Chars<'a>>,
+    input: Chars<'a>,
     /// Current position in the source
     pos: SourcePos,
     /// The current character being processed
@@ -16,11 +15,11 @@ pub struct Lexer<'a> {
 impl<'a> Lexer<'a> {
     /// Create a new lexer from a string
     pub fn new(source: &'a str) -> Self {
-        let mut chars = source.chars().peekable();
-        let current = chars.next();
+        let mut input = source.chars();
+        let current = input.next();
 
         Self {
-            input: chars,
+            input,
             pos: SourcePos { line: 1, column: 1 },
             current,
             at_eof: false,
@@ -47,7 +46,7 @@ impl<'a> Lexer<'a> {
 
     /// Peek at the next character without advancing
     fn peek(&mut self) -> Option<char> {
-        self.input.peek().copied()
+        self.input.clone().next()
     }
 
     /// Check if the current character matches the expected one and advance if it does
