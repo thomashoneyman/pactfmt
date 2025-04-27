@@ -15,11 +15,11 @@ pub struct Lexer<'a> {
 impl<'a> Lexer<'a> {
     /// Create a new lexer from a string
     pub fn new(source: &'a str) -> Self {
-        let mut chars = source.chars();
-        let current = chars.next();
+        let mut input = source.chars();
+        let current = input.next();
 
         Self {
-            input: chars,
+            input,
             pos: SourcePos { line: 1, column: 1 },
             current,
             at_eof: false,
