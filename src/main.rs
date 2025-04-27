@@ -3,7 +3,7 @@ use formatter::{check_source, format_source};
 use std::io::{self, Read};
 
 #[derive(Debug, Parser)]
-#[command(version)]
+#[command(arg_required_else_help(true), version)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
