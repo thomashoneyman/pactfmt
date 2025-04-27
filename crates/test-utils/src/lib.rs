@@ -33,10 +33,8 @@ pub fn find_pact_files(dir: &str) -> Vec<PathBuf> {
     let mut pact_files = Vec::new();
     for entry in entries {
         let path = entry.expect("Failed to read directory entry").path();
-        if path.is_file() {
-            if path.extension().map_or(false, |ext| ext == "pact") {
-                pact_files.push(path);
-            }
+        if path.is_file() && path.extension().is_some_and(|ext| ext == "pact") {
+            pact_files.push(path);
         }
     }
 
@@ -49,7 +47,7 @@ pub fn find_pact_files(dir: &str) -> Vec<PathBuf> {
 
 /// Read a .pact file and return its content as a flattened string
 pub fn flatten_pact_file(file: &PathBuf) -> String {
-    let content = std::fs::read_to_string(&file).expect("Failed to read file content");
+    let content = std::fs::read_to_string(file).expect("Failed to read file content");
     flatten_pact_string(&content)
 }
 
