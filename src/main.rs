@@ -1,9 +1,12 @@
 use clap::{Parser, Subcommand};
 use formatter::{check_source, format_source};
-use std::io::{self, Read};
+use std::{
+    fs,
+    io::{self, Read},
+};
 
 #[derive(Debug, Parser)]
-#[command(version)]
+#[command(arg_required_else_help(true), version)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -25,18 +28,22 @@ enum Commands {
     },
 }
 
+fn file_or_stdin(input: Option<&str>) -> io::Result<String> {
+    if let Some(path) = input {
+        fs::read_to_string(path)
+    } else {
+        let mut stdin = io::stdin();
+        let mut buffer = String::new();
+        stdin.read_to_string(&mut buffer)?;
+        Ok(buffer)
+    }
+}
+
 fn main() -> io::Result<()> {
     let cli = Cli::parse();
     match &cli.command {
         Some(Commands::Check { input }) => {
-            let content = match input {
-                Some(path) => std::fs::read_to_string(path)?,
-                None => {
-                    let mut buffer = String::new();
-                    std::io::stdin().read_to_string(&mut buffer)?;
-                    buffer
-                }
-            };
+            let content = file_or_stdin(input.as_deref())?;
             if check_source(&content, 80) {
                 println!("Syntax OK");
             } else {
@@ -46,15 +53,7 @@ fn main() -> io::Result<()> {
             Ok(())
         }
         Some(Commands::Format { input }) => {
-            let content = match input {
-                Some(path) => std::fs::read_to_string(path)?,
-                None => {
-                    let mut buffer = String::new();
-                    std::io::stdin().read_to_string(&mut buffer)?;
-                    buffer
-                }
-            };
-
+            let content = file_or_stdin(input.as_deref())?;
             let formatted = format_source(&content, 80);
             match formatted {
                 Ok(formatted) => println!("{}", formatted),
@@ -65,9 +64,6 @@ fn main() -> io::Result<()> {
             }
             Ok(())
         }
-        _ => {
-            println!("Unrecognized command!");
-            std::process::exit(1);
-        }
+        _ => unreachable!(),
     }
 }
