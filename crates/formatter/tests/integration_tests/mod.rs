@@ -11,7 +11,10 @@ fn test_pact_parser_agreement() {
         let content = flatten_pact_file(&file);
         let formatted = match format_source(&content, 80) {
             Ok(formatted) => flatten_pact_string(&formatted),
-            Err(err) => panic!("Failed to format content: {}", err),
+            Err(err) => panic!(
+                "Failed to format content: {}",
+                String::from_utf8(err).unwrap()
+            ),
         };
 
         let original_output = match run_pact_command(&content, Some("parser")) {
