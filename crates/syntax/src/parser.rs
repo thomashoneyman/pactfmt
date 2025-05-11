@@ -103,7 +103,7 @@ impl Parser {
         let mark = self.open();
         self.events.push(Event::Error {
             error: ParseError {
-                message: format!("{}", error),
+                message: error.to_string(),
                 line: self.tokens[self.pos].range.start.line,
                 column: self.tokens[self.pos].range.start.column,
             },
