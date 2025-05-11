@@ -12,7 +12,7 @@ use crate::{format_doc::FormatDoc, format_tree::FST};
 
 /// Format the input source code, returning an error if the parsed input
 /// contains any error trees.
-pub fn format_source(input: &str, width: usize) -> Result<String, String> {
+pub fn format_source(input: &str, width: usize) -> Result<String, Vec<u8>> {
     let tokens = tokenize(input);
     let (parsed_trees, parsed_errors) = parse(tokens);
     let significant_errors = report_errors(&parsed_trees, &parsed_errors);
@@ -37,7 +37,7 @@ pub fn format_source(input: &str, width: usize) -> Result<String, String> {
     Ok(formatted)
 }
 
-fn format_errors(input: &str, errors: Vec<&ParseError>) -> String {
+fn format_errors(input: &str, errors: Vec<&ParseError>) -> Vec<u8> {
     let line_index = LineIndex::new(input);
     let errors = errors.iter().filter_map(|&error| {
         let line = (error.line - 1) as u32;
@@ -59,7 +59,7 @@ fn format_errors(input: &str, errors: Vec<&ParseError>) -> String {
         .finish()
         .write(("<stdin>", Source::from(input)), &mut buffer)
         .unwrap();
-    String::from_utf8(buffer).unwrap()
+    buffer
 }
 
 /// True if the input can be formatted (no parse errors) and the formatted

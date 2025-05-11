@@ -58,7 +58,7 @@ fn main() -> io::Result<()> {
             match formatted {
                 Ok(formatted) => println!("{}", formatted),
                 Err(err) => {
-                    eprintln!("Error: {}", err);
+                    eprintln!("{}", String::from_utf8(err).unwrap());
                     std::process::exit(1);
                 }
             }
