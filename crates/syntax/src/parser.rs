@@ -1,11 +1,19 @@
 use crate::types::{Child, SourceToken, TokenKind, Tree, TreeKind};
 use std::cell::Cell;
 
+#[derive(Debug, Clone)]
+pub struct ParseError {
+    pub message: String,
+    pub line: usize,
+    pub column: usize,
+}
+
 /// These represent the operations needed to build a syntax tree.
 #[derive(Debug, Clone)]
 enum Event {
     Open { kind: TreeKind },
     Close,
+    Error { error: ParseError },
     Advance,
 }
 
@@ -80,27 +88,34 @@ impl Parser {
         if self.eat(kind) {
             return;
         }
-        // TODO: Error reporting.
-        eprintln!(
-            "expected {:?} but received {:?} at line {}, column {}",
-            kind,
-            self.nth(0),
-            self.tokens[self.pos].range.start.line,
-            self.tokens[self.pos].range.start.column
-        );
+        self.events.push(Event::Error {
+            error: ParseError {
+                message: format!("Expected {:?} but received {:?}", kind, self.nth(0)),
+                line: self.tokens[self.pos].range.start.line,
+                column: self.tokens[self.pos].range.start.column,
+            },
+        });
     }
 
     fn advance_with_error(&mut self, error: &str) {
         let mark = self.open();
-        eprintln!("{error}");
+        self.events.push(Event::Error {
+            error: ParseError {
+                message: format!("{}", error),
+                line: self.tokens[self.pos].range.start.line,
+                column: self.tokens[self.pos].range.start.column,
+            },
+        });
         self.advance();
         self.close(mark, TreeKind::ErrorTree);
     }
 }
 
 impl Parser {
-    fn build_trees(self) -> Vec<Tree> {
+    fn build_trees(self) -> (Vec<Tree>, Vec<ParseError>) {
         let mut tokens = self.tokens.into_iter();
+        let mut errors = vec![];
+
         let events = self.events;
         let mut stack = Vec::new(); // in-progress trees
         let mut result = Vec::new(); // completed trees
@@ -125,6 +140,10 @@ impl Parser {
                     }
                 }
 
+                Event::Error { error } => {
+                    errors.push(error);
+                }
+
                 // This token is part of the current tree
                 Event::Advance => {
                     let token = tokens.next().unwrap();
@@ -141,11 +160,11 @@ impl Parser {
             }) | None
         ));
 
-        result
+        (result, errors)
     }
 }
 
-pub fn parse(tokens: Vec<SourceToken>) -> Vec<Tree> {
+pub fn parse(tokens: Vec<SourceToken>) -> (Vec<Tree>, Vec<ParseError>) {
     let mut p = Parser {
         tokens,
         pos: 0,

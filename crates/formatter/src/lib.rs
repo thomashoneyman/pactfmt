@@ -13,7 +13,7 @@ use crate::format_tree::FST;
 /// contains any error trees.
 pub fn format_source(input: &str, width: usize) -> Result<String, String> {
     let tokens = tokenize(input);
-    let parsed_trees = parse(tokens);
+    let (parsed_trees, _) = parse(tokens);
     if parsed_trees.iter().any(|tree| tree.has_errors()) {
         return Err("Parse errors".to_string());
     }
