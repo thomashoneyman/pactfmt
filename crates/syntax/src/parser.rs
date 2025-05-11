@@ -88,6 +88,7 @@ impl Parser {
         if self.eat(kind) {
             return;
         }
+        let mark = self.open();
         self.events.push(Event::Error {
             error: ParseError {
                 message: format!("Expected {:?} but received {:?}", kind, self.nth(0)),
@@ -95,6 +96,7 @@ impl Parser {
                 column: self.tokens[self.pos].range.start.column,
             },
         });
+        self.close(mark, TreeKind::ErrorTree);
     }
 
     fn advance_with_error(&mut self, error: &str) {

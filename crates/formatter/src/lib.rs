@@ -4,16 +4,16 @@ mod lower_tree;
 
 use pretty::RcAllocator;
 use syntax::parser::parse;
-use syntax::tokenize;
+use syntax::{report_errors, tokenize};
 
-use crate::format_doc::FormatDoc;
-use crate::format_tree::FST;
+use crate::{format_doc::FormatDoc, format_tree::FST};
 
 /// Format the input source code, returning an error if the parsed input
 /// contains any error trees.
 pub fn format_source(input: &str, width: usize) -> Result<String, String> {
     let tokens = tokenize(input);
-    let (parsed_trees, _) = parse(tokens);
+    let (parsed_trees, parsed_errors) = parse(tokens);
+    let significant_errors = report_errors(&parsed_trees, &parsed_errors);
     if parsed_trees.iter().any(|tree| tree.has_errors()) {
         return Err("Parse errors".to_string());
     }
