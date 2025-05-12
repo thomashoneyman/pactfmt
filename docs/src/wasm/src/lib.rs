@@ -1,3 +1,6 @@
+use formatter;
+use strip_ansi_escapes::strip_str;
+use syntax;
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]
@@ -13,7 +16,7 @@ pub fn lex(source: &str) -> String {
 #[wasm_bindgen]
 pub fn parse(source: &str) -> String {
     let tokens = syntax::tokenize(source);
-    let ast = syntax::parse(tokens);
+    let (ast, _) = syntax::parse(tokens);
     let mut result = String::new();
     for tree in ast {
         result.push_str(&tree.format_condensed().to_string());
@@ -25,7 +28,10 @@ pub fn parse(source: &str) -> String {
 pub fn format(source: &str) -> String {
     let src = formatter::format_source(source, 80);
     match src {
-        Err(err) => err,
+        Err(err) => {
+            let output = String::from_utf8(err).unwrap();
+            strip_str(output)
+        }
         Ok(formatted) => formatted,
     }
 }

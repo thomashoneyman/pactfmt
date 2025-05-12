@@ -10,3 +10,4 @@ crate-type = ["cdylib", "rlib"]
 wasm-bindgen = "0.2.84"
 formatter = { path = "../../../crates/formatter" }
 syntax = { path = "../../../crates/syntax" }
+strip-ansi-escapes = "0.2.1"
